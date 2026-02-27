@@ -1,6 +1,7 @@
 """方案 C: MedSAM 微调脚本。
 
-使用 LoRA adapter 微调 MedSAM，加入 7 类分类头做联合训练。
+冻结 image encoder，只训练 prompt encoder + mask decoder + 分类头。
+encoder 使用 torch.no_grad() 前向传播，避免存储巨量激活张量。
 
 前置条件:
     1. 下载 MedSAM 预训练权重: medsam_vit_b.pth
@@ -30,11 +31,12 @@ sys.path.insert(0, str(ROOT))
 from src.label_mapping import DISEASE_CLASSES, DISEASE_CLASS_TO_ID, get_disease_from_label
 
 MEDSAM_DIR = ROOT / "data" / "medsam"
+EMBED_DIR = ROOT / "data" / "medsam_embeddings"
 SAVE_DIR = ROOT / "runs" / "medsam"
 
 
 class MedSAMDataset(Dataset):
-    """MedSAM 微调数据集。"""
+    """MedSAM 微调数据集（加载原始图片）。"""
 
     def __init__(self, split: str, img_size: int = 1024):
         self.split_dir = MEDSAM_DIR / split
@@ -90,16 +92,68 @@ class MedSAMDataset(Dataset):
         return image, mask, bbox_scaled, disease_id
 
 
+class CachedMedSAMDataset(Dataset):
+    """使用预计算 image embeddings 的数据集（速度更快）。"""
+
+    def __init__(self, split: str, img_size: int = 1024):
+        self.split_dir = MEDSAM_DIR / split
+        self.embed_dir = EMBED_DIR / split
+        self.img_size = img_size
+
+        with open(self.split_dir / "bboxes.json", encoding="utf-8") as f:
+            self.entries = json.load(f)
+
+        # 加载图片尺寸缓存
+        sizes_path = self.embed_dir / "image_sizes.json"
+        with open(sizes_path, encoding="utf-8") as f:
+            self.image_sizes = json.load(f)
+
+    def __len__(self):
+        return len(self.entries)
+
+    def __getitem__(self, idx):
+        entry = self.entries[idx]
+
+        # 加载预计算 embedding
+        embed_path = self.embed_dir / (Path(entry["image"]).stem + ".pt")
+        image_embedding = torch.load(embed_path, weights_only=True).squeeze(0)
+
+        # 加载掩码
+        mask_path = self.split_dir / "masks" / entry["mask"]
+        mask = np.array(Image.open(mask_path), dtype=np.float32) / 255.0
+        mask = np.array(Image.fromarray((mask * 255).astype(np.uint8)).resize(
+            (256, 256), Image.NEAREST
+        ), dtype=np.float32) / 255.0
+        mask = torch.from_numpy(mask).unsqueeze(0)
+
+        # Bbox prompt（使用缓存的原始尺寸）
+        orig_w, orig_h = self.image_sizes[entry["image"]]
+        bbox = entry["bbox"]
+        scale_x = self.img_size / orig_w
+        scale_y = self.img_size / orig_h
+        bbox_scaled = torch.tensor([
+            bbox[0] * scale_x, bbox[1] * scale_y,
+            bbox[2] * scale_x, bbox[3] * scale_y,
+        ], dtype=torch.float32)
+
+        # 疾病分类标签
+        cat_name = entry["category"]
+        disease = get_disease_from_label(cat_name)
+        disease_id = DISEASE_CLASS_TO_ID.get(disease, 0)
+
+        return image_embedding, mask, bbox_scaled, disease_id
+
+
 class MedSAMWithClassifier(nn.Module):
     """MedSAM + 分类头的联合模型。"""
 
-    def __init__(self, sam_model, num_classes: int = 7, freeze_encoder: bool = False):
+    def __init__(self, sam_model, num_classes: int = 7):
         super().__init__()
         self.sam = sam_model
 
-        if freeze_encoder:
-            for param in self.sam.image_encoder.parameters():
-                param.requires_grad = False
+        # 冻结 image encoder
+        for param in self.sam.image_encoder.parameters():
+            param.requires_grad = False
 
         # 分类头：从 image_encoder 输出做全局平均池化 → 分类
         encoder_dim = 256  # SAM ViT-B encoder output dim
@@ -112,25 +166,44 @@ class MedSAMWithClassifier(nn.Module):
             nn.Linear(128, num_classes),
         )
 
-    def forward(self, images, boxes):
-        # Image encoder
-        image_embeddings = self.sam.image_encoder(images)
+    def forward_with_images(self, images, boxes):
+        """从原始图片前向传播（encoder 用 no_grad 加速）。"""
+        with torch.no_grad():
+            image_embeddings = self.sam.image_encoder(images)
+        # detach 断开计算图，分类头和 decoder 仍可反向传播
+        image_embeddings = image_embeddings.detach().requires_grad_(True)
+        return self._decode(image_embeddings, boxes)
 
-        # Prompt encoder (bbox)
-        sparse_embeddings, dense_embeddings = self.sam.prompt_encoder(
-            points=None,
-            boxes=boxes,
-            masks=None,
-        )
+    def forward_with_embeddings(self, image_embeddings, boxes):
+        """从预计算 embeddings 前向传播。"""
+        image_embeddings = image_embeddings.requires_grad_(True)
+        return self._decode(image_embeddings, boxes)
 
-        # Mask decoder
-        low_res_masks, iou_predictions = self.sam.mask_decoder(
-            image_embeddings=image_embeddings,
-            image_pe=self.sam.prompt_encoder.get_dense_pe(),
-            sparse_prompt_embeddings=sparse_embeddings,
-            dense_prompt_embeddings=dense_embeddings,
-            multimask_output=False,
-        )
+    def _decode(self, image_embeddings, boxes):
+        """Prompt encoder + mask decoder + classifier。"""
+        batch_size = image_embeddings.shape[0]
+        all_masks = []
+        all_ious = []
+        image_pe = self.sam.prompt_encoder.get_dense_pe()
+
+        for i in range(batch_size):
+            sparse_embeddings, dense_embeddings = self.sam.prompt_encoder(
+                points=None,
+                boxes=boxes[i:i+1],
+                masks=None,
+            )
+            low_res_mask, iou_pred = self.sam.mask_decoder(
+                image_embeddings=image_embeddings[i:i+1],
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sparse_embeddings,
+                dense_prompt_embeddings=dense_embeddings,
+                multimask_output=False,
+            )
+            all_masks.append(low_res_mask)
+            all_ious.append(iou_pred)
+
+        low_res_masks = torch.cat(all_masks, dim=0)
+        iou_predictions = torch.cat(all_ious, dim=0)
 
         # Classification from encoder features
         cls_logits = self.classifier(image_embeddings)
@@ -146,9 +219,68 @@ def dice_loss(pred, target, smooth=1e-5):
     return 1.0 - dice.mean()
 
 
+def precompute_embeddings(args):
+    """预计算所有图片的 image embeddings 并缓存到磁盘。"""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    from segment_anything import sam_model_registry
+    sam = sam_model_registry["vit_b"](checkpoint=args.weights)
+    encoder = sam.image_encoder.to(device)
+    encoder.eval()
+
+    for split in ["train", "val"]:
+        split_dir = MEDSAM_DIR / split
+        out_dir = EMBED_DIR / split
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(split_dir / "bboxes.json", encoding="utf-8") as f:
+            entries = json.load(f)
+
+        # 去重
+        unique_images = sorted(set(e["image"] for e in entries))
+        print(f"{split}: {len(unique_images)} unique images, {len(entries)} samples")
+
+        # 保存图片原始尺寸
+        image_sizes = {}
+        done = 0
+
+        for img_name in tqdm(unique_images, desc=f"Pre-computing {split}"):
+            out_path = out_dir / (Path(img_name).stem + ".pt")
+
+            img_path = split_dir / "images" / img_name
+            img = Image.open(img_path).convert("RGB")
+            image_sizes[img_name] = [img.width, img.height]
+
+            if out_path.exists():
+                done += 1
+                continue
+
+            image = np.array(img.resize((1024, 1024), Image.BILINEAR), dtype=np.float32)
+            image = image / 255.0
+            image_t = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                embedding = encoder(image_t)
+
+            torch.save(embedding.cpu().half(), out_path)  # float16 节省磁盘
+            done += 1
+
+        # 保存尺寸信息
+        with open(out_dir / "image_sizes.json", "w", encoding="utf-8") as f:
+            json.dump(image_sizes, f)
+
+        print(f"  {split} done: {done} embeddings cached")
+
+    print("All embeddings pre-computed!")
+
+
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+
+    # 检查是否有预计算 embeddings
+    use_cached = (EMBED_DIR / "train").exists() and (EMBED_DIR / "val").exists()
 
     # 加载 MedSAM
     from segment_anything import sam_model_registry
@@ -158,14 +290,22 @@ def train(args):
     model = model.to(device)
 
     # 数据加载
-    train_ds = MedSAMDataset("train")
-    val_ds = MedSAMDataset("val")
+    if use_cached:
+        print("使用预计算 embeddings 加速训练")
+        train_ds = CachedMedSAMDataset("train")
+        val_ds = CachedMedSAMDataset("val")
+    else:
+        print("未找到预计算 embeddings，使用原始图片（较慢）")
+        print("提示: 运行 --precompute 先预计算 embeddings")
+        train_ds = MedSAMDataset("train")
+        val_ds = MedSAMDataset("val")
+
     print(f"训练样本: {len(train_ds)}, 验证样本: {len(val_ds)}")
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=2)
 
-    # 优化器（分割和分类用不同学习率）
+    # 优化器（只训练 decoder + classifier）
     seg_params = list(model.sam.mask_decoder.parameters()) + list(model.sam.prompt_encoder.parameters())
     cls_params = list(model.classifier.parameters())
 
@@ -187,13 +327,21 @@ def train(args):
         epoch_cls_loss = 0
         n_batches = 0
 
-        for images, masks, bboxes, disease_ids in tqdm(train_loader, desc=f"Epoch {epoch}", leave=False):
-            images = images.to(device)
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}", leave=False):
+            if use_cached:
+                embeddings, masks, bboxes, disease_ids = batch
+                embeddings = embeddings.float().to(device)
+            else:
+                images, masks, bboxes, disease_ids = batch
+                images = images.to(device)
             masks = masks.to(device)
             bboxes = bboxes.to(device)
             disease_ids = disease_ids.to(device)
 
-            low_res_masks, _, cls_logits = model(images, bboxes)
+            if use_cached:
+                low_res_masks, _, cls_logits = model.forward_with_embeddings(embeddings, bboxes)
+            else:
+                low_res_masks, _, cls_logits = model.forward_with_images(images, bboxes)
 
             seg_loss = dice_loss(low_res_masks, masks) + F.binary_cross_entropy_with_logits(low_res_masks, masks)
             cls_loss = cls_criterion(cls_logits, disease_ids)
@@ -216,13 +364,21 @@ def train(args):
         val_total = 0
 
         with torch.no_grad():
-            for images, masks, bboxes, disease_ids in val_loader:
-                images = images.to(device)
+            for batch in val_loader:
+                if use_cached:
+                    embeddings, masks, bboxes, disease_ids = batch
+                    embeddings = embeddings.float().to(device)
+                else:
+                    images, masks, bboxes, disease_ids = batch
+                    images = images.to(device)
                 masks = masks.to(device)
                 bboxes = bboxes.to(device)
                 disease_ids = disease_ids.to(device)
 
-                low_res_masks, _, cls_logits = model(images, bboxes)
+                if use_cached:
+                    low_res_masks, _, cls_logits = model.forward_with_embeddings(embeddings, bboxes)
+                else:
+                    low_res_masks, _, cls_logits = model.forward_with_images(images, bboxes)
 
                 # Dice
                 pred_masks = (torch.sigmoid(low_res_masks) > 0.5).float()
@@ -261,9 +417,13 @@ def main():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--evaluate", action="store_true")
+    parser.add_argument("--precompute", action="store_true", help="预计算 image embeddings")
     args = parser.parse_args()
 
-    train(args)
+    if args.precompute:
+        precompute_embeddings(args)
+    else:
+        train(args)
 
 
 if __name__ == "__main__":
