@@ -173,7 +173,7 @@ def main():
         model.load_state_dict(torch.load(ckpt, map_location=device))
 
         test_ds = UltrasoundDataset(SPLITS_DIR / "test.txt", CLEANED_DIR, get_transforms(False))
-        test_loader = DataLoader(test_ds, batch_size=args.batch_size, num_workers=4)
+        test_loader = DataLoader(test_ds, batch_size=args.batch_size, num_workers=2)
         criterion = nn.CrossEntropyLoss()
 
         loss, acc, preds, labels = evaluate(model, test_loader, criterion, device)
@@ -194,8 +194,8 @@ def main():
     sample_weights = train_ds.get_sample_weights()
     sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=4)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=4)
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=2)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=2)
 
     model = create_model(num_classes, device)
     class_weights = train_ds.get_class_weights().to(device)

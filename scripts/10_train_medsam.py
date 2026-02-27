@@ -162,8 +162,8 @@ def train(args):
     val_ds = MedSAMDataset("val")
     print(f"训练样本: {len(train_ds)}, 验证样本: {len(val_ds)}")
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=4)
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=2)
 
     # 优化器（分割和分类用不同学习率）
     seg_params = list(model.sam.mask_decoder.parameters()) + list(model.sam.prompt_encoder.parameters())
