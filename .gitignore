@@ -5,3 +5,13 @@ __pycache__/
 *.pth
 runs/*/weights/
 runs/segment/
+
+# 训练产物（大文件）
+runs/nnunet/
+runs/yolo_seg/
+runs/classifier/
+runs/medsam/
+
+# 临时文件
+nul
+*_content.txt
