@@ -1,0 +1,15 @@
+{
+  "method": "MedSAM",
+  "image": "data/cleaned/正常/900632677_甄妮/甄妮_54924326.jpg",
+  "diagnosis": "类风湿性关节炎",
+  "probabilities": {
+    "正常": 0.1192,
+    "类风湿性关节炎": 0.4328,
+    "骨性关节炎": 0.1316,
+    "痛风性关节炎": 0.1984,
+    "脊柱关节炎": 0.0994,
+    "损伤": 0.015,
+    "滑膜囊肿": 0.0035
+  },
+  "mask_saved": "C:\\liangz77\\python_projects\\github_projects\\ultrasound_recog\\runs\\inference\\medsam\\甄妮_54924326_mask.png"
+}
