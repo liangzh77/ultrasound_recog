@@ -1,15 +1,21 @@
 """方案 B 补充: 独立疾病分类器训练。
 
-使用 EfficientNet-B4 进行 7 类疾病分类。
+使用 EfficientNet-B0 进行 7 类疾病分类。
 配合 nnU-Net 分割模型组成完整方案 B。
+
+v5 改进（修复 v4 过度正则化导致 8% 准确率问题）：
+- EfficientNet-B0（4M 参数，比 B4 的 19M 更适合 3419 样本数据集）
+- 单阶段训练，lr=1e-3 + CosineAnnealing
+- 增加 Dropout=0.3 替代 Mixup/RandomErasing/label_smoothing
+- 简单数据增强（与 v1 类似）
 
 用法:
     python scripts/09_train_classifier.py
     python scripts/09_train_classifier.py --evaluate
+    python scripts/09_train_classifier.py --epochs 100 --patience 20
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -85,8 +91,8 @@ def get_transforms(is_train: bool):
         return transforms.Compose([
             transforms.Resize((384, 384)),
             transforms.RandomHorizontalFlip(0.5),
-            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.1),
-            transforms.RandomAffine(degrees=10, translate=(0.05, 0.05), scale=(0.9, 1.1)),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1),
+            transforms.RandomAffine(degrees=10, translate=(0.05, 0.05)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
@@ -99,9 +105,15 @@ def get_transforms(is_train: bool):
 
 
 def create_model(num_classes: int, device: torch.device):
-    """创建 EfficientNet-B4 分类器。"""
+    """创建 EfficientNet-B0 分类器。"""
     import timm
-    model = timm.create_model("efficientnet_b4", pretrained=True, num_classes=num_classes)
+    model = timm.create_model(
+        "efficientnet_b0",
+        pretrained=True,
+        num_classes=num_classes,
+        drop_rate=0.3,
+        drop_path_rate=0.1,
+    )
     return model.to(device)
 
 
@@ -120,9 +132,9 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * images.size(0)
         _, predicted = outputs.max(1)
         correct += predicted.eq(labels).sum().item()
+        total_loss += loss.item() * images.size(0)
         total += images.size(0)
 
     return total_loss / total, correct / total
@@ -158,7 +170,9 @@ def main():
     parser.add_argument("--evaluate", action="store_true", help="仅在测试集上评估")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--patience", type=int, default=20,
+                        help="早停 patience（默认 20）")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -198,31 +212,60 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=2)
 
     model = create_model(num_classes, device)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"总参数: {total_params:,}")
+
     class_weights = train_ds.get_class_weights().to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     SAVE_DIR.mkdir(parents=True, exist_ok=True)
     best_acc = 0
+    patience_counter = 0
 
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, criterion, optimizer, device,
+        )
         val_loss, val_acc, _, _ = evaluate(model, val_loader, criterion, device)
         scheduler.step()
 
+        lr_now = optimizer.param_groups[0]["lr"]
         print(f"Epoch {epoch}/{args.epochs} | "
               f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
-              f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f}")
+              f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
+              f"LR: {lr_now:.6f}")
 
         if val_acc > best_acc:
             best_acc = val_acc
+            patience_counter = 0
             torch.save(model.state_dict(), SAVE_DIR / "best.pth")
             print(f"  >> Best model saved (acc={best_acc:.4f})")
+        else:
+            patience_counter += 1
 
         torch.save(model.state_dict(), SAVE_DIR / "last.pth")
 
+        # 早停
+        if patience_counter >= args.patience:
+            print(f"\n早停: {args.patience} 个 epoch 无提升，停止训练")
+            break
+
     print(f"\n训练完成! Best val acc: {best_acc:.4f}")
+
+    # 自动在 test 集上评估
+    print("\n--- Test 集评估 ---")
+    model.load_state_dict(torch.load(SAVE_DIR / "best.pth", map_location=device))
+    test_ds = UltrasoundDataset(SPLITS_DIR / "test.txt", CLEANED_DIR, get_transforms(False))
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size, num_workers=0)
+    test_criterion = nn.CrossEntropyLoss()
+    test_loss, test_acc, preds, labels = evaluate(model, test_loader, test_criterion, device)
+    print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+
+    from sklearn.metrics import classification_report
+    print(classification_report(labels, preds, target_names=DISEASE_CLASSES))
 
 
 if __name__ == "__main__":

@@ -46,7 +46,7 @@ def _classify_image(image_path: str) -> dict:
         return {"diagnosis": "未知", "error": "分类器权重不存在"}
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = timm.create_model("efficientnet_b4", pretrained=False, num_classes=len(DISEASE_CLASSES))
+    model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=len(DISEASE_CLASSES))
     model.load_state_dict(torch.load(ckpt, map_location=device))
     model.eval()
     model.to(device)

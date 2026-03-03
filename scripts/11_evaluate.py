@@ -261,7 +261,7 @@ def evaluate_medsam(sam_weights: str | None = None):
 
 
 def evaluate_classifier():
-    """评估 EfficientNet-B4 分类器在 test 集上的指标。"""
+    """评估 EfficientNet-B0 分类器在 test 集上的指标。"""
     import timm
     import torch
     from torch.utils.data import DataLoader
@@ -275,7 +275,7 @@ def evaluate_classifier():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_classes = len(DISEASE_CLASSES)
 
-    model = timm.create_model("efficientnet_b4", pretrained=False, num_classes=num_classes)
+    model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=num_classes)
     model.load_state_dict(torch.load(ckpt, map_location=device))
     model = model.to(device)
     model.eval()
