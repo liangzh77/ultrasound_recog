@@ -314,7 +314,7 @@ def evaluate_classifier():
     cls_metrics = compute_classification_metrics(all_labels, all_preds, DISEASE_CLASSES)
 
     results = {
-        "method": "EfficientNet-B4",
+        "method": "EfficientNet-B0",
         "eval_set": f"test ({len(all_labels)} images)",
         "classification": {
             "accuracy": round(cls_metrics["accuracy"], 4),

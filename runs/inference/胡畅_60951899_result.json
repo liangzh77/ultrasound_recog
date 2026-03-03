@@ -1,15 +1,28 @@
 {
-  "method": "nnU-Net + EfficientNet-B4",
+  "method": "YOLO11-seg v2 + EfficientNet-B0",
   "image": "data/cleaned/损伤/901320058_胡畅/胡畅_60951899.jpg",
-  "diagnosis": "骨性关节炎",
+  "diagnosis": "痛风性关节炎",
   "probabilities": {
-    "正常": 0.0,
-    "类风湿性关节炎": 0.0006,
-    "骨性关节炎": 0.9989,
-    "痛风性关节炎": 0.0,
-    "脊柱关节炎": 0.0,
+    "正常": 0.0744,
+    "类风湿性关节炎": 0.0306,
+    "骨性关节炎": 0.0842,
+    "痛风性关节炎": 0.8053,
+    "脊柱关节炎": 0.0051,
     "损伤": 0.0005,
     "滑膜囊肿": 0.0
   },
-  "note": "分割结果需通过 nnUNetv2_predict 命令生成"
+  "num_detections": 1,
+  "detections": [
+    {
+      "category": "髂胫束",
+      "confidence": 0.9131,
+      "bbox": [
+        188.6,
+        233.6,
+        904.2,
+        351.8
+      ],
+      "polygon_count": 1
+    }
+  ]
 }

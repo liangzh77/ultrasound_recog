@@ -1,15 +1,39 @@
 {
-  "method": "MedSAM",
+  "method": "YOLO11-seg v2 + EfficientNet-B0",
   "image": "data/cleaned/正常/900632677_甄妮/甄妮_54924326.jpg",
-  "diagnosis": "类风湿性关节炎",
+  "diagnosis": "正常",
   "probabilities": {
-    "正常": 0.1192,
-    "类风湿性关节炎": 0.4328,
-    "骨性关节炎": 0.1316,
-    "痛风性关节炎": 0.1984,
-    "脊柱关节炎": 0.0994,
-    "损伤": 0.015,
-    "滑膜囊肿": 0.0035
+    "正常": 0.5846,
+    "类风湿性关节炎": 0.0067,
+    "骨性关节炎": 0.0003,
+    "痛风性关节炎": 0.0004,
+    "脊柱关节炎": 0.408,
+    "损伤": 0.0,
+    "滑膜囊肿": 0.0
   },
-  "mask_saved": "C:\\liangz77\\python_projects\\github_projects\\ultrasound_recog\\runs\\inference\\medsam\\甄妮_54924326_mask.png"
+  "num_detections": 2,
+  "detections": [
+    {
+      "category": "股四头肌腱",
+      "confidence": 0.7786,
+      "bbox": [
+        292.9,
+        213.1,
+        960.1,
+        454.9
+      ],
+      "polygon_count": 2
+    },
+    {
+      "category": "骨皮质",
+      "confidence": 0.4765,
+      "bbox": [
+        796.1,
+        294.7,
+        883.1,
+        350.1
+      ],
+      "polygon_count": 1
+    }
+  ]
 }

@@ -35,7 +35,7 @@ def _import_script(name: str):
 
 
 def _classify_image(image_path: str) -> dict:
-    """使用 EfficientNet-B4 对图片做疾病分类。"""
+    """使用 EfficientNet-B0 对图片做疾病分类。"""
     import timm
     import torch
     from PIL import Image
@@ -73,7 +73,7 @@ def _classify_image(image_path: str) -> dict:
 
 
 def infer_yolo(image_path: str, save_vis: bool = True) -> dict:
-    """YOLO11-seg v2 推理（21 类解剖结构分割 + EfficientNet-B4 疾病分类）。"""
+    """YOLO11-seg v2 推理（21 类解剖结构分割 + EfficientNet-B0 疾病分类）。"""
     from ultralytics import YOLO
 
     model_path = ROOT / "runs" / "yolo_seg" / "knee_v2" / "weights" / "best.pt"
@@ -117,11 +117,11 @@ def infer_yolo(image_path: str, save_vis: bool = True) -> dict:
                 "polygon_count": len(polygons),
             })
 
-    # 使用 EfficientNet-B4 做疾病诊断
+    # 使用 EfficientNet-B0 做疾病诊断
     cls_result = _classify_image(image_path)
 
     return {
-        "method": "YOLO11-seg v2 + EfficientNet-B4",
+        "method": "YOLO11-seg v2 + EfficientNet-B0",
         "image": image_path,
         "diagnosis": cls_result.get("diagnosis", "未知"),
         "probabilities": cls_result.get("probabilities"),
@@ -131,12 +131,12 @@ def infer_yolo(image_path: str, save_vis: bool = True) -> dict:
 
 
 def infer_nnunet(image_path: str) -> dict:
-    """nnU-Net + EfficientNet-B4 推理。"""
-    # 使用 EfficientNet-B4 做疾病诊断
+    """nnU-Net + EfficientNet-B0 推理。"""
+    # 使用 EfficientNet-B0 做疾病诊断
     cls_result = _classify_image(image_path)
 
     return {
-        "method": "nnU-Net + EfficientNet-B4",
+        "method": "nnU-Net + EfficientNet-B0",
         "image": image_path,
         "diagnosis": cls_result.get("diagnosis", "未知"),
         "probabilities": cls_result.get("probabilities"),
