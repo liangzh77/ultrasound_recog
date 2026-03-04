@@ -11,3 +11,4 @@ scikit-learn
 matplotlib
 seaborn
 tqdm
+gradio>=4.0
