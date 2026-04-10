@@ -827,6 +827,7 @@ class MainWindow(QMainWindow):
         self._tree.setMinimumWidth(180); self._tree.setMaximumWidth(300)
         self._tree.populate(DATA_ROOT)
         self._tree.itemClicked.connect(self._on_tree_click)
+        self._tree.currentItemChanged.connect(lambda cur, _: self._on_tree_click(cur, 0) if cur else None)
         splitter.addWidget(self._tree)
 
         self._viewer = ImageViewer()
