@@ -135,8 +135,8 @@ def clip_polygon_to_rect(pts: list, x1: float, y1: float, x2: float, y2: float) 
 
 def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
     """
-    裁剪图片并更新标注 JSON，保存到 CROP_ROOT/{disease}/{patient}/。
-    返回保存的图片路径。
+    裁剪图片并更新标注 JSON，直接覆盖原文件。
+    返回保存的图片路径（即 image_path 本身）。
     """
     x1 = int(round(crop_rect.x()))
     y1 = int(round(crop_rect.y()))
@@ -144,31 +144,18 @@ def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
     y2 = int(round(crop_rect.y() + crop_rect.height()))
     cw, ch = x2 - x1, y2 - y1
 
-    disease  = image_path.parent.parent.name
-    patient  = image_path.parent.name
-    out_dir  = CROP_ROOT / disease / patient
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # ── 裁剪并覆盖图片 ──
+    pixmap  = QPixmap(str(image_path))
+    cropped = pixmap.copy(x1, y1, cw, ch)
+    cropped.save(str(image_path))
 
-    # ── 裁剪并保存图片 ──
-    pixmap   = QPixmap(str(image_path))
-    cropped  = pixmap.copy(x1, y1, cw, ch)
-    out_img  = out_dir / image_path.name
-    # 如果同名文件已存在，加序号
-    stem, suffix = image_path.stem, image_path.suffix
-    idx = 1
-    while out_img.exists():
-        out_img = out_dir / f"{stem}_c{idx}{suffix}"
-        idx += 1
-    cropped.save(str(out_img))
-
-    # ── 更新标注 JSON ──
+    # ── 更新标注 JSON（覆盖原 JSON）──
     json_path = image_path.with_suffix(".json")
     if json_path.exists():
-        data = json.loads(json_path.read_text(encoding="utf-8"))
+        data     = json.loads(json_path.read_text(encoding="utf-8"))
         new_data = copy.deepcopy(data)
 
-        # 更新 info
-        new_data["info"]["name"]   = out_img.name
+        new_data["info"]["name"]   = image_path.name
         new_data["info"]["width"]  = cw
         new_data["info"]["height"] = ch
 
@@ -180,19 +167,15 @@ def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
             clipped = clip_polygon_to_rect(pts, x1, y1, x2, y2)
             if len(clipped) < 3:
                 continue
-            # 坐标平移：相对于裁剪框左上角
-            shifted = [[p[0] - x1, p[1] - y1] for p in clipped]
-            obj["segmentation"] = shifted
+            obj["segmentation"] = [[p[0] - x1, p[1] - y1] for p in clipped]
             new_objects.append(obj)
 
         new_data["objects"] = new_objects
-
-        out_json = out_img.with_suffix(".json")
-        out_json.write_text(
+        json_path.write_text(
             json.dumps(new_data, ensure_ascii=False, indent=4), encoding="utf-8"
         )
 
-    return out_img
+    return image_path
 
 
 # ── 裁剪覆盖层（控制点 + 选框） ───────────────────────────────────────────────
@@ -401,7 +384,8 @@ class ImageViewer(QGraphicsView):
             except Exception:
                 pass
 
-        self.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        self._scene.setSceneRect(QRectF(0, 0, *self._img_size))
+        self.fitInView(QRectF(0, 0, *self._img_size), Qt.AspectRatioMode.KeepAspectRatio)
         self._apply_visibility()
         return labels_in_image
 
@@ -450,8 +434,8 @@ class ImageViewer(QGraphicsView):
     def zoom_out(self): self.scale(0.8, 0.8)
 
     def zoom_reset(self):
-        if self._scene.sceneRect().isValid():
-            self.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        if self._img_size[0] > 0:
+            self.fitInView(QRectF(0, 0, *self._img_size), Qt.AspectRatioMode.KeepAspectRatio)
 
     def wheelEvent(self, event: QWheelEvent):
         if self._crop_mode == CropMode.OFF:
@@ -917,21 +901,25 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            out_path = save_crop(img_path, crop_rect)
+            save_crop(img_path, crop_rect)
+
+            ann_count = 0
+            json_path = img_path.with_suffix(".json")
+            if json_path.exists():
+                ann_count = len(json.loads(json_path.read_text(encoding="utf-8")).get("objects", []))
+
+            self._cancel_crop()
+            # 重新加载图片（覆盖后刷新显示）
+            labels = self._viewer.load_image(img_path, self.color_map)
             disease = img_path.parent.parent.name
             patient = img_path.parent.name.split("_", 1)[-1]
-            ann_count = len(json.loads(
-                out_path.with_suffix(".json").read_text(encoding="utf-8")
-            ).get("objects", [])) if out_path.with_suffix(".json").exists() else 0
-
-            QMessageBox.information(
-                self, "保存成功",
-                f"图片已保存：\n{out_path}\n\n"
-                f"裁剪尺寸：{int(crop_rect.width())} × {int(crop_rect.height())}\n"
-                f"保留标注区域：{ann_count} 个"
+            pixmap  = QPixmap(str(img_path))
+            size    = (pixmap.width(), pixmap.height()) if not pixmap.isNull() else None
+            self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
+            self._status.showMessage(
+                f"裁剪完成  {int(crop_rect.width())} × {int(crop_rect.height())}  "
+                f"保留标注 {ann_count} 个  |  {img_path.name}"
             )
-            self._cancel_crop()
-            self._status.showMessage(f"已保存裁剪结果 → data/裁剪结果/{disease}/{patient}/{out_path.name}")
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
 
