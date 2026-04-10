@@ -133,10 +133,12 @@ def clip_polygon_to_rect(pts: list, x1: float, y1: float, x2: float, y2: float) 
     return output
 
 
-def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
+def save_crop(image_path: Path, crop_rect: QRectF) -> dict:
     """
     裁剪图片并更新标注 JSON，直接覆盖原文件。
-    返回保存的图片路径（即 image_path 本身）。
+    返回 undo/redo 缓存字典：
+      {path, orig_img, orig_json, new_img, new_json}
+    其中 orig_* 是覆盖前的内容，new_* 是覆盖后的内容。
     """
     x1 = int(round(crop_rect.x()))
     y1 = int(round(crop_rect.y()))
@@ -144,21 +146,25 @@ def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
     y2 = int(round(crop_rect.y() + crop_rect.height()))
     cw, ch = x2 - x1, y2 - y1
 
+    json_path = image_path.with_suffix(".json")
+
+    # ── 先读原始内容（用于 undo）──
+    orig_img_bytes = image_path.read_bytes()
+    orig_json_str  = json_path.read_text(encoding="utf-8") if json_path.exists() else None
+
     # ── 裁剪并覆盖图片 ──
     pixmap  = QPixmap(str(image_path))
     cropped = pixmap.copy(x1, y1, cw, ch)
     cropped.save(str(image_path))
 
     # ── 更新标注 JSON（覆盖原 JSON）──
-    json_path = image_path.with_suffix(".json")
-    if json_path.exists():
-        data     = json.loads(json_path.read_text(encoding="utf-8"))
+    new_json_str = None
+    if orig_json_str is not None:
+        data     = json.loads(orig_json_str)
         new_data = copy.deepcopy(data)
-
         new_data["info"]["name"]   = image_path.name
         new_data["info"]["width"]  = cw
         new_data["info"]["height"] = ch
-
         new_objects = []
         for obj in new_data.get("objects", []):
             pts = obj.get("segmentation", [])
@@ -169,13 +175,17 @@ def save_crop(image_path: Path, crop_rect: QRectF) -> Path:
                 continue
             obj["segmentation"] = [[p[0] - x1, p[1] - y1] for p in clipped]
             new_objects.append(obj)
-
         new_data["objects"] = new_objects
-        json_path.write_text(
-            json.dumps(new_data, ensure_ascii=False, indent=4), encoding="utf-8"
-        )
+        new_json_str = json.dumps(new_data, ensure_ascii=False, indent=4)
+        json_path.write_text(new_json_str, encoding="utf-8")
 
-    return image_path
+    return {
+        "path":      image_path,
+        "orig_img":  orig_img_bytes,
+        "orig_json": orig_json_str,
+        "new_img":   image_path.read_bytes(),   # 保存后再读，得到实际写入内容
+        "new_json":  new_json_str,
+    }
 
 
 # ── 裁剪覆盖层（控制点 + 选框） ───────────────────────────────────────────────
@@ -780,18 +790,29 @@ class MainWindow(QMainWindow):
         # 分隔
         sep = QWidget(); sep.setFixedWidth(10); toolbar.addWidget(sep)
 
-        self._btn_crop = tbtn("✂ 裁剪", 80)
-        self._btn_crop.setCheckable(True)
-        self._btn_save = tbtn("💾 保存裁剪", 90)
+        self._btn_crop   = tbtn("✂ 裁剪", 80);  self._btn_crop.setCheckable(True)
+        self._btn_save   = tbtn("✓ 确认裁剪", 90)
         self._btn_cancel = tbtn("✕ 取消", 70)
         self._btn_save.setVisible(False)
         self._btn_cancel.setVisible(False)
+
+        sep2 = QWidget(); sep2.setFixedWidth(10); toolbar.addWidget(sep2)
+
+        self._btn_undo = tbtn("↩ 撤回", 72)
+        self._btn_redo = tbtn("↪ 恢复", 72)
+        self._btn_undo.setEnabled(False)
+        self._btn_redo.setEnabled(False)
+
+        self._undo_cache: dict | None = None   # 上一次裁剪的缓存
+        self._redo_cache: dict | None = None   # 撤回后可恢复的缓存
 
         self._btn_ann.clicked.connect(self._toggle_ann)
         self._btn_lbl.clicked.connect(self._toggle_lbl)
         self._btn_crop.clicked.connect(self._toggle_crop)
         self._btn_save.clicked.connect(self._do_save_crop)
         self._btn_cancel.clicked.connect(self._cancel_crop)
+        self._btn_undo.clicked.connect(self._do_undo)
+        self._btn_redo.clicked.connect(self._do_redo)
 
         self._refresh_styles()
 
@@ -901,27 +922,58 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            save_crop(img_path, crop_rect)
+            cache = save_crop(img_path, crop_rect)
+            self._undo_cache = cache
+            self._redo_cache = None
+            self._btn_undo.setEnabled(True)
+            self._btn_redo.setEnabled(False)
 
-            ann_count = 0
-            json_path = img_path.with_suffix(".json")
-            if json_path.exists():
-                ann_count = len(json.loads(json_path.read_text(encoding="utf-8")).get("objects", []))
-
+            ann_count = len(json.loads(cache["new_json"]).get("objects", [])) if cache["new_json"] else 0
             self._cancel_crop()
-            # 重新加载图片（覆盖后刷新显示）
-            labels = self._viewer.load_image(img_path, self.color_map)
-            disease = img_path.parent.parent.name
-            patient = img_path.parent.name.split("_", 1)[-1]
-            pixmap  = QPixmap(str(img_path))
-            size    = (pixmap.width(), pixmap.height()) if not pixmap.isNull() else None
-            self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
+            self._reload_image(img_path)
             self._status.showMessage(
                 f"裁剪完成  {int(crop_rect.width())} × {int(crop_rect.height())}  "
-                f"保留标注 {ann_count} 个  |  {img_path.name}"
+                f"保留标注 {ann_count} 个  |  {img_path.name}   [↩ 可撤回]"
             )
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
+
+    def _reload_image(self, img_path: Path):
+        """重新加载图片并刷新右侧面板。"""
+        labels  = self._viewer.load_image(img_path, self.color_map)
+        disease = img_path.parent.parent.name
+        patient = img_path.parent.name.split("_", 1)[-1]
+        pixmap  = QPixmap(str(img_path))
+        size    = (pixmap.width(), pixmap.height()) if not pixmap.isNull() else None
+        self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
+
+    def _do_undo(self):
+        if not self._undo_cache:
+            return
+        c = self._undo_cache
+        c["path"].write_bytes(c["orig_img"])
+        if c["orig_json"] is not None:
+            c["path"].with_suffix(".json").write_text(c["orig_json"], encoding="utf-8")
+        self._redo_cache = c
+        self._undo_cache = None
+        self._btn_undo.setEnabled(False)
+        self._btn_redo.setEnabled(True)
+        self._reload_image(c["path"])
+        self._status.showMessage(f"已撤回裁剪  |  {c['path'].name}   [↪ 可恢复]")
+
+    def _do_redo(self):
+        if not self._redo_cache:
+            return
+        c = self._redo_cache
+        c["path"].write_bytes(c["new_img"])
+        if c["new_json"] is not None:
+            c["path"].with_suffix(".json").write_text(c["new_json"], encoding="utf-8")
+        self._undo_cache = c
+        self._redo_cache = None
+        self._btn_undo.setEnabled(True)
+        self._btn_redo.setEnabled(False)
+        self._reload_image(c["path"])
+        self._status.showMessage(f"已恢复裁剪  |  {c['path'].name}   [↩ 可撤回]")
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -936,6 +988,8 @@ class MainWindow(QMainWindow):
         self._btn_crop.setStyleSheet(BTN_ACTIVE if self._btn_crop.isChecked() else BTN_NORMAL)
         self._btn_save.setStyleSheet(BTN_WARN)
         self._btn_cancel.setStyleSheet(BTN_NORMAL)
+        self._btn_undo.setStyleSheet(BTN_NORMAL)
+        self._btn_redo.setStyleSheet(BTN_NORMAL)
 
 
 # ── 入口 ──────────────────────────────────────────────────────────────────────
