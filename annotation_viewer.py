@@ -332,7 +332,9 @@ class CropMode(Enum):
 
 class ImageViewer(QGraphicsView):
 
-    crop_rect_changed = Signal(QRectF)   # 裁剪框变化时通知主窗口
+    crop_rect_changed  = Signal(QRectF)   # 裁剪框变化时通知主窗口
+    navigate_requested = Signal(int)      # -1=上一项, +1=下一项
+    expand_requested   = Signal()         # 展开/折叠当前文件夹
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -572,9 +574,16 @@ class ImageViewer(QGraphicsView):
         self._drag_move = False
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape and self._crop_mode != CropMode.OFF:
+        key = event.key()
+        if key == Qt.Key.Key_Escape and self._crop_mode != CropMode.OFF:
             self._exit_crop_mode()
             self.crop_rect_changed.emit(QRectF())
+        elif key == Qt.Key.Key_Up:
+            self.navigate_requested.emit(-1)
+        elif key == Qt.Key.Key_Down:
+            self.navigate_requested.emit(1)
+        elif key == Qt.Key.Key_Right:
+            self.expand_requested.emit()
         else:
             super().keyPressEvent(event)
 
@@ -790,7 +799,10 @@ class MainWindow(QMainWindow):
         # 分隔
         sep = QWidget(); sep.setFixedWidth(10); toolbar.addWidget(sep)
 
-        self._btn_crop   = tbtn("✂ 裁剪  [空格]", 110)
+        self._btn_crop = QPushButton("✂ 裁剪")
+        self._btn_crop.setFixedHeight(28)
+        self._btn_crop.setMinimumWidth(80)   # 自适应宽度，不截断
+        toolbar.addWidget(self._btn_crop)
         self._btn_cancel = tbtn("✕ 取消", 70)
         self._btn_cancel.setVisible(False)
         self._in_crop_mode = False
@@ -812,10 +824,13 @@ class MainWindow(QMainWindow):
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
 
-        # 空格快捷键：窗口级别，焦点在任何子控件时均生效
-        space_sc = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
-        space_sc.setContext(Qt.ShortcutContext.WindowShortcut)
-        space_sc.activated.connect(self._on_crop_btn)
+        # 回车快捷键：窗口级别，焦点在任何子控件时均生效
+        enter_sc = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
+        enter_sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        enter_sc.activated.connect(self._on_crop_btn)
+
+        self._viewer.navigate_requested.connect(self._tree_navigate)
+        self._viewer.expand_requested.connect(self._tree_expand)
 
         self._refresh_styles()
 
@@ -860,7 +875,7 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
         # 重置裁剪按钮状态
         self._in_crop_mode = False
-        self._btn_crop.setText("✂ 裁剪  [空格]")
+        self._btn_crop.setText("✂ 裁剪")
         self._btn_cancel.setVisible(False)
         self._refresh_styles()
 
@@ -885,7 +900,7 @@ class MainWindow(QMainWindow):
                 self._status.showMessage("请先选择一张图片")
                 return
             self._in_crop_mode = True
-            self._btn_crop.setText("✓ 确认裁剪  [空格]")
+            self._btn_crop.setText("✓ 确认裁剪")
             self._btn_cancel.setVisible(True)
             self._viewer.enter_crop_mode()
             self._status.showMessage("拖拽画出裁剪区域，8个控制点可调整边界 | 空格/再次点击确认  ESC/取消按钮退出")
@@ -895,7 +910,7 @@ class MainWindow(QMainWindow):
 
     def _cancel_crop(self):
         self._in_crop_mode = False
-        self._btn_crop.setText("✂ 裁剪  [空格]")
+        self._btn_crop.setText("✂ 裁剪")
         self._btn_cancel.setVisible(False)
         self._viewer.cancel_crop()
         self._panel.update_crop_info(None)
@@ -980,11 +995,24 @@ class MainWindow(QMainWindow):
         self._reload_image(c["path"])
         self._status.showMessage(f"已恢复裁剪  |  {c['path'].name}   [↩ 可撤回]")
 
+    def _tree_navigate(self, direction: int):
+        """上下键导航文件树（从图像区域触发）。"""
+        cur = self._tree.currentItem()
+        nxt = self._tree.itemAbove(cur) if direction == -1 else self._tree.itemBelow(cur)
+        if nxt:
+            self._tree.setCurrentItem(nxt)
+            self._tree.scrollToItem(nxt)
+
+    def _tree_expand(self):
+        """右键展开当前文件夹，已展开则折叠。"""
+        cur = self._tree.currentItem()
+        if cur is None:
+            return
+        if cur.data(0, Qt.ItemDataRole.UserRole) is not None:
+            return   # 图片节点，忽略
+        cur.setExpanded(not cur.isExpanded())
+
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if self._in_crop_mode:
-                self._do_save_crop()
-                return
         super().keyPressEvent(event)
 
     def _refresh_styles(self):
