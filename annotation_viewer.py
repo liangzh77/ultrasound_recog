@@ -829,9 +829,6 @@ class MainWindow(QMainWindow):
         enter_sc.setContext(Qt.ShortcutContext.WindowShortcut)
         enter_sc.activated.connect(self._on_crop_btn)
 
-        self._viewer.navigate_requested.connect(self._tree_navigate)
-        self._viewer.expand_requested.connect(self._tree_expand)
-
         self._refresh_styles()
 
         # 三栏
@@ -847,6 +844,8 @@ class MainWindow(QMainWindow):
 
         self._viewer = ImageViewer()
         self._viewer.crop_rect_changed.connect(self._on_crop_changed)
+        self._viewer.navigate_requested.connect(self._tree_navigate)
+        self._viewer.expand_requested.connect(self._tree_expand)
         splitter.addWidget(self._viewer)
 
         self._panel = InfoPanel()
