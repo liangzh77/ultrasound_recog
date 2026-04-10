@@ -998,9 +998,30 @@ class MainWindow(QMainWindow):
         """上下键导航文件树（从图像区域触发）。"""
         cur = self._tree.currentItem()
         nxt = self._tree.itemAbove(cur) if direction == -1 else self._tree.itemBelow(cur)
-        if nxt:
-            self._tree.setCurrentItem(nxt)
-            self._tree.scrollToItem(nxt)
+        if nxt is None:
+            return
+        # 如果下一项是文件夹，自动展开并跳到第一个图片
+        if direction == 1 and not isinstance(nxt.data(0, Qt.ItemDataRole.UserRole), Path):
+            nxt.setExpanded(True)   # 触发懒加载（_on_expand 同步执行）
+            # 找第一个图片子节点
+            first_img = self._first_image_child(nxt)
+            if first_img:
+                nxt = first_img
+        self._tree.setCurrentItem(nxt)
+        self._tree.scrollToItem(nxt)
+
+    def _first_image_child(self, item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        """递归找 item 下第一个图片节点（UserRole 是 Path 的节点）。"""
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if isinstance(child.data(0, Qt.ItemDataRole.UserRole), Path):
+                return child
+            # 子项也是文件夹，继续向下找
+            child.setExpanded(True)
+            found = self._first_image_child(child)
+            if found:
+                return found
+        return None
 
     def _tree_expand(self):
         """右键展开当前文件夹，已展开则折叠。"""
