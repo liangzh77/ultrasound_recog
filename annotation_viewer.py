@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import (
     QPolygonF, QColor, QPen, QBrush, QPixmap, QFont,
-    QWheelEvent, QIcon, QPainterPath, QCursor,
+    QWheelEvent, QIcon, QPainterPath, QCursor, QShortcut, QKeySequence,
 )
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
@@ -812,6 +812,11 @@ class MainWindow(QMainWindow):
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
 
+        # 空格快捷键：窗口级别，焦点在任何子控件时均生效
+        space_sc = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
+        space_sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        space_sc.activated.connect(self._on_crop_btn)
+
         self._refresh_styles()
 
         # 三栏
@@ -975,9 +980,6 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"已恢复裁剪  |  {c['path'].name}   [↩ 可撤回]")
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Space:
-            self._on_crop_btn()
-            return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             if self._in_crop_mode:
                 self._do_save_crop()
