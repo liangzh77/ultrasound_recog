@@ -790,11 +790,10 @@ class MainWindow(QMainWindow):
         # 分隔
         sep = QWidget(); sep.setFixedWidth(10); toolbar.addWidget(sep)
 
-        self._btn_crop   = tbtn("✂ 裁剪", 80);  self._btn_crop.setCheckable(True)
-        self._btn_save   = tbtn("✓ 确认裁剪", 90)
+        self._btn_crop   = tbtn("✂ 裁剪  [空格]", 110)
         self._btn_cancel = tbtn("✕ 取消", 70)
-        self._btn_save.setVisible(False)
         self._btn_cancel.setVisible(False)
+        self._in_crop_mode = False
 
         sep2 = QWidget(); sep2.setFixedWidth(10); toolbar.addWidget(sep2)
 
@@ -808,8 +807,7 @@ class MainWindow(QMainWindow):
 
         self._btn_ann.clicked.connect(self._toggle_ann)
         self._btn_lbl.clicked.connect(self._toggle_lbl)
-        self._btn_crop.clicked.connect(self._toggle_crop)
-        self._btn_save.clicked.connect(self._do_save_crop)
+        self._btn_crop.clicked.connect(self._on_crop_btn)
         self._btn_cancel.clicked.connect(self._cancel_crop)
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
@@ -855,8 +853,8 @@ class MainWindow(QMainWindow):
         self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
         self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
         # 重置裁剪按钮状态
-        self._btn_crop.setChecked(False)
-        self._btn_save.setVisible(False)
+        self._in_crop_mode = False
+        self._btn_crop.setText("✂ 裁剪  [空格]")
         self._btn_cancel.setVisible(False)
         self._refresh_styles()
 
@@ -874,25 +872,26 @@ class MainWindow(QMainWindow):
         self._viewer.toggle_labels(show)
         self._refresh_styles()
 
-    def _toggle_crop(self):
-        if self._btn_crop.isChecked():
+    def _on_crop_btn(self):
+        """裁剪按钮：第一次点击进入裁剪模式，第二次点击确认保存。"""
+        if not self._in_crop_mode:
             if self._viewer.get_image_path() is None:
-                self._btn_crop.setChecked(False)
                 self._status.showMessage("请先选择一张图片")
                 return
-            self._viewer.enter_crop_mode()
-            self._btn_save.setVisible(True)
+            self._in_crop_mode = True
+            self._btn_crop.setText("✓ 确认裁剪  [空格]")
             self._btn_cancel.setVisible(True)
-            self._status.showMessage("拖拽画出裁剪区域，8个控制点可调整边界，ESC取消")
+            self._viewer.enter_crop_mode()
+            self._status.showMessage("拖拽画出裁剪区域，8个控制点可调整边界 | 空格/再次点击确认  ESC/取消按钮退出")
         else:
-            self._cancel_crop()
+            self._do_save_crop()
         self._refresh_styles()
 
     def _cancel_crop(self):
-        self._viewer.cancel_crop()
-        self._btn_crop.setChecked(False)
-        self._btn_save.setVisible(False)
+        self._in_crop_mode = False
+        self._btn_crop.setText("✂ 裁剪  [空格]")
         self._btn_cancel.setVisible(False)
+        self._viewer.cancel_crop()
         self._panel.update_crop_info(None)
         self._refresh_styles()
         self._status.showMessage("已取消裁剪")
@@ -976,8 +975,11 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"已恢复裁剪  |  {c['path'].name}   [↩ 可撤回]")
 
     def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Space:
+            self._on_crop_btn()
+            return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if self._btn_crop.isChecked():
+            if self._in_crop_mode:
                 self._do_save_crop()
                 return
         super().keyPressEvent(event)
@@ -985,8 +987,7 @@ class MainWindow(QMainWindow):
     def _refresh_styles(self):
         self._btn_ann.setStyleSheet(BTN_ACTIVE if self._btn_ann.isChecked() else BTN_NORMAL)
         self._btn_lbl.setStyleSheet(BTN_ACTIVE if self._btn_lbl.isChecked() else BTN_NORMAL)
-        self._btn_crop.setStyleSheet(BTN_ACTIVE if self._btn_crop.isChecked() else BTN_NORMAL)
-        self._btn_save.setStyleSheet(BTN_WARN)
+        self._btn_crop.setStyleSheet(BTN_WARN if self._in_crop_mode else BTN_NORMAL)
         self._btn_cancel.setStyleSheet(BTN_NORMAL)
         self._btn_undo.setStyleSheet(BTN_NORMAL)
         self._btn_redo.setStyleSheet(BTN_NORMAL)
