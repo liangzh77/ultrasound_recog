@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem, QGraphicsPathItem,
     QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QToolBar, QStatusBar, QFrame, QPushButton, QSizePolicy, QDoubleSpinBox,
+    QProgressDialog,
     QMessageBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
@@ -395,7 +396,7 @@ def clip_polygon_to_rect(pts: list, x1: float, y1: float, x2: float, y2: float) 
     return output
 
 
-def save_crop(image_path: Path, crop_rect: QRectF) -> dict:
+def save_crop(image_path: Path, crop_rect: QRectF, candidates: dict[str, list[int]] | None = None) -> dict:
     """
     仅更新标注 JSON，记录超声图像矩形区域，不修改原图和分割点。
     返回 undo/redo 缓存字典：
@@ -424,7 +425,12 @@ def save_crop(image_path: Path, crop_rect: QRectF) -> dict:
             "width": x2 - x1,
             "height": y2 - y1,
         }
-        new_data["cropped"] = False
+        if candidates is not None:
+            new_data["ultrasound_candidates"] = {
+                edge: [int(v) for v in candidates.get(edge, [])]
+                for edge in ("left", "right", "top", "bottom")
+            }
+        new_data.pop("cropped", None)
         new_json_str = json.dumps(new_data, ensure_ascii=False, indent=4)
         json_path.write_text(new_json_str, encoding="utf-8")
 
@@ -664,6 +670,7 @@ class CropMode(Enum):
 class ImageViewer(QGraphicsView):
 
     crop_rect_changed  = Signal(QRectF)   # 裁剪框变化时通知主窗口
+    crop_commit_requested = Signal()      # 一次边界调整完成，需要持久化
     navigate_requested = Signal(int)      # -1=上一项, +1=下一项
     expand_requested   = Signal()         # 展开/折叠当前文件夹
 
@@ -692,6 +699,7 @@ class ImageViewer(QGraphicsView):
         self._drag_move: bool = False
         self._last_scene_pos: QPointF | None = None
         self._edge_candidates: dict[str, list[int]] = {"left": [], "right": [], "top": [], "bottom": []}
+        self._saved_crop_rect: QRectF | None = None
 
     # ── 图片加载 ──
 
@@ -716,6 +724,27 @@ class ImageViewer(QGraphicsView):
         if json_path.exists():
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
+                ultrasound_rect = data.get("ultrasound_rect")
+                if isinstance(ultrasound_rect, dict):
+                    self._add_ultrasound_rect(ultrasound_rect)
+                    try:
+                        x1 = float(ultrasound_rect["x1"])
+                        y1 = float(ultrasound_rect["y1"])
+                        width = float(ultrasound_rect.get("width", float(ultrasound_rect["x2"]) - x1))
+                        height = float(ultrasound_rect.get("height", float(ultrasound_rect["y2"]) - y1))
+                        self._saved_crop_rect = QRectF(x1, y1, width, height)
+                    except Exception:
+                        self._saved_crop_rect = None
+                else:
+                    self._saved_crop_rect = None
+                ultrasound_candidates = data.get("ultrasound_candidates")
+                if isinstance(ultrasound_candidates, dict):
+                    self.set_edge_candidates({
+                        edge: [int(v) for v in ultrasound_candidates.get(edge, [])]
+                        for edge in ("left", "right", "top", "bottom")
+                    })
+                else:
+                    self.set_edge_candidates(None)
                 for obj in data.get("objects", []):
                     cat = obj.get("category", "").strip()
                     pts = obj.get("segmentation", [])
@@ -726,12 +755,46 @@ class ImageViewer(QGraphicsView):
                     if cat not in labels_in_image:
                         labels_in_image.append(cat)
             except Exception:
+                self._saved_crop_rect = None
+                self.set_edge_candidates(None)
                 pass
+        else:
+            self._saved_crop_rect = None
+            self.set_edge_candidates(None)
 
         self._scene.setSceneRect(QRectF(0, 0, *self._img_size))
         self.fitInView(QRectF(0, 0, *self._img_size), Qt.AspectRatioMode.KeepAspectRatio)
         self._apply_visibility()
         return labels_in_image
+
+    def _add_ultrasound_rect(self, rect_data: dict):
+        try:
+            x1 = float(rect_data["x1"])
+            y1 = float(rect_data["y1"])
+            width = float(rect_data.get("width", float(rect_data["x2"]) - x1))
+            height = float(rect_data.get("height", float(rect_data["y2"]) - y1))
+        except Exception:
+            return
+        if width <= 0 or height <= 0:
+            return
+
+        rect_item = QGraphicsRectItem(x1, y1, width, height)
+        rect_item.setPen(QPen(QColor(255, 215, 0), 2.5, Qt.PenStyle.DashLine))
+        rect_item.setBrush(QBrush(QColor(255, 215, 0, 25)))
+        rect_item.setZValue(3)
+        self._scene.addItem(rect_item)
+        self._annotation_group.append(rect_item)
+
+        text_item = QGraphicsTextItem("ultrasound")
+        text_item.setDefaultTextColor(QColor(255, 215, 0))
+        font = QFont()
+        font.setPointSize(LABEL_FONT_SIZE + 1)
+        font.setBold(True)
+        text_item.setFont(font)
+        text_item.setPos(x1 + 4, max(0.0, y1 - 20))
+        text_item.setZValue(4)
+        self._scene.addItem(text_item)
+        self._annotation_group.append(text_item)
 
     def _add_polygon(self, label: str, pts: list, color: QColor):
         polygon = QPolygonF([QPointF(p[0], p[1]) for p in pts])
@@ -759,7 +822,7 @@ class ImageViewer(QGraphicsView):
 
     def _apply_visibility(self):
         for item in self._annotation_group:
-            if isinstance(item, QGraphicsPolygonItem):
+            if isinstance(item, (QGraphicsPolygonItem, QGraphicsRectItem)):
                 item.setVisible(self._show_annotations)
             elif isinstance(item, QGraphicsTextItem):
                 item.setVisible(self._show_annotations and self._show_labels)
@@ -828,6 +891,15 @@ class ImageViewer(QGraphicsView):
 
     def set_edge_candidates(self, candidates: dict[str, list[int]] | None):
         self._edge_candidates = candidates or {"left": [], "right": [], "top": [], "bottom": []}
+
+    def get_edge_candidates(self) -> dict[str, list[int]]:
+        return {k: list(v) for k, v in self._edge_candidates.items()}
+
+    def get_saved_crop_rect(self) -> QRectF | None:
+        return self._saved_crop_rect
+
+    def set_saved_crop_rect(self, rect: QRectF | None):
+        self._saved_crop_rect = QRectF(rect) if rect is not None else None
 
     # ── 控制点容差（从视口像素转场景坐标） ──
 
@@ -921,24 +993,28 @@ class ImageViewer(QGraphicsView):
             if new_left is not None:
                 self._crop_overlay.set_edge("left", float(new_left))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                self.crop_commit_requested.emit()
                 return True
         elif edge == "right":
             new_right = choose(self._edge_candidates.get("right", []), right, toward_larger=scene_pos.x() > right)
             if new_right is not None:
                 self._crop_overlay.set_edge("right", float(new_right))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                self.crop_commit_requested.emit()
                 return True
         elif edge == "top":
             new_top = choose(self._edge_candidates.get("top", []), top, toward_larger=scene_pos.y() > top)
             if new_top is not None:
                 self._crop_overlay.set_edge("top", float(new_top))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                self.crop_commit_requested.emit()
                 return True
         elif edge == "bottom":
             new_bottom = choose(self._edge_candidates.get("bottom", []), bottom, toward_larger=scene_pos.y() > bottom)
             if new_bottom is not None:
                 self._crop_overlay.set_edge("bottom", float(new_bottom))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                self.crop_commit_requested.emit()
                 return True
 
         return False
@@ -1032,12 +1108,16 @@ class ImageViewer(QGraphicsView):
         if event.button() != Qt.MouseButton.LeftButton:
             return
 
+        commit_needed = self._drag_handle is not None or self._drag_move
+
         if self._crop_mode == CropMode.DRAWING:
             self._crop_mode = CropMode.ADJUSTING
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._drag_handle = None
         self._drag_move = False
+        if commit_needed:
+            self.crop_commit_requested.emit()
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -1311,6 +1391,7 @@ class MainWindow(QMainWindow):
         self._btn_crop.setMinimumWidth(120)
         toolbar.addWidget(self._btn_crop)
         self._btn_auto_crop = tbtn("自动框选(\\)", 100)
+        self._btn_auto_crop_all = tbtn("自动框选全部", 100)
         toolbar.addWidget(QLabel("跳变阈值"))
         self._spin_auto_jump = QDoubleSpinBox()
         self._spin_auto_jump.setDecimals(0)
@@ -1346,6 +1427,7 @@ class MainWindow(QMainWindow):
         self._btn_lbl.clicked.connect(self._toggle_lbl)
         self._btn_crop.clicked.connect(self._on_crop_btn)
         self._btn_auto_crop.clicked.connect(self._on_auto_crop_btn)
+        self._btn_auto_crop_all.clicked.connect(self._on_auto_crop_all_btn)
         self._btn_cancel.clicked.connect(self._cancel_crop)
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
@@ -1376,6 +1458,7 @@ class MainWindow(QMainWindow):
 
         self._viewer = ImageViewer()
         self._viewer.crop_rect_changed.connect(self._on_crop_changed)
+        self._viewer.crop_commit_requested.connect(self._autosave_crop_if_needed)
         self._viewer.navigate_requested.connect(self._tree_navigate)
         self._viewer.expand_requested.connect(self._tree_expand)
         splitter.addWidget(self._viewer)
@@ -1403,11 +1486,22 @@ class MainWindow(QMainWindow):
         size       = (pixmap.width(), pixmap.height()) if not pixmap.isNull() else None
         labels     = self._viewer.load_image(img_path, self.color_map)
         self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
-        self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
-        # 重置裁剪按钮状态
-        self._in_crop_mode = False
-        self._btn_crop.setText("✂ 裁剪[回车]")
-        self._btn_cancel.setVisible(False)
+        saved_rect = self._viewer.get_saved_crop_rect()
+        if saved_rect is not None and saved_rect.isValid():
+            self._in_crop_mode = True
+            self._btn_crop.setText("✓ 确认裁剪[回车]")
+            self._btn_cancel.setVisible(True)
+            self._viewer.enter_crop_mode(saved_rect)
+            self._viewer.set_edge_candidates(self._viewer.get_edge_candidates())
+            self._panel.update_crop_info(saved_rect)
+            self._status.showMessage(
+                f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域  |   已加载超声区域，可直接调整"
+            )
+        else:
+            self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
+            self._in_crop_mode = False
+            self._btn_crop.setText("✂ 裁剪[回车]")
+            self._btn_cancel.setVisible(False)
         self._refresh_styles()
 
     # ── 工具栏 ──
@@ -1433,7 +1527,8 @@ class MainWindow(QMainWindow):
             self._in_crop_mode = True
             self._btn_crop.setText("✓ 确认裁剪[回车]")
             self._btn_cancel.setVisible(True)
-            self._viewer.enter_crop_mode()
+            saved_rect = self._viewer.get_saved_crop_rect()
+            self._viewer.enter_crop_mode(saved_rect)
             self._status.showMessage("拖拽画出裁剪区域，8个控制点可调整边界 | 空格/再次点击确认  ESC/取消按钮退出")
         else:
             self._do_save_crop()
@@ -1462,6 +1557,94 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "自动框选失败", str(e))
             self._status.showMessage(f"自动框选失败：{e}")
         self._refresh_styles()
+
+    def _iter_all_image_paths(self) -> list[Path]:
+        return sorted(
+            img for img in DATA_ROOT.rglob("*")
+            if img.is_file() and img.suffix in IMAGE_EXTS and img.with_suffix(".json").exists()
+        )
+
+    def _on_auto_crop_all_btn(self):
+        image_paths = self._iter_all_image_paths()
+        if not image_paths:
+            self._status.showMessage("没有找到可处理的图片")
+            return
+
+        jump_ratio = self._spin_auto_jump.value() / 100.0
+        total = len(image_paths)
+        processed = 0
+        skipped = 0
+        failed: list[str] = []
+        cancelled = False
+
+        progress = QProgressDialog("正在自动框选全部图片...", "取消", 0, total, self)
+        progress.setWindowTitle("自动框选全部")
+        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.setValue(0)
+        progress.show()
+
+        for idx, img_path in enumerate(image_paths, start=1):
+            progress.setLabelText(
+                f"正在处理 {idx}/{total}\n{img_path.name}\n成功:{processed}  跳过:{skipped}  失败:{len(failed)}"
+            )
+            progress.setValue(idx - 1)
+            QApplication.processEvents()
+
+            if progress.wasCanceled():
+                cancelled = True
+                break
+
+            if self._tree._is_cropped(img_path):
+                skipped += 1
+                progress.setValue(idx)
+                continue
+            try:
+                geometry = detect_ultrasound_geometry(img_path, jump_ratio=jump_ratio)
+                save_crop(img_path, geometry["rect"], geometry.get("candidates"))
+                processed += 1
+            except Exception as e:
+                failed.append(f"{img_path.name}: {e}")
+
+            progress.setValue(idx)
+            QApplication.processEvents()
+
+            if progress.wasCanceled():
+                cancelled = True
+                break
+
+        if cancelled:
+            progress.setLabelText(
+                f"已取消\n已成功:{processed}  跳过:{skipped}  失败:{len(failed)}"
+            )
+        else:
+            progress.setValue(total)
+            progress.setLabelText(
+                f"处理完成\n成功:{processed}  跳过:{skipped}  失败:{len(failed)}"
+            )
+        progress.close()
+
+        current_path = self._viewer.get_image_path()
+        if current_path is not None:
+            self._reload_image(current_path)
+        if self._btn_filter.isChecked():
+            self._tree.set_filter_uncropped(True)
+
+        if failed:
+            preview = "\n".join(failed[:12])
+            if len(failed) > 12:
+                preview += f"\n... 其余 {len(failed) - 12} 项略"
+            QMessageBox.warning(
+                self,
+                "自动框选全部完成",
+                f"{'已取消。' if cancelled else ''}成功 {processed} 张，跳过 {skipped} 张，失败 {len(failed)} 张。\n\n{preview}",
+            )
+        else:
+            self._status.showMessage(
+                f"{'自动框选全部已取消' if cancelled else '自动框选全部完成'}  成功:{processed}  跳过:{skipped}  失败:0"
+            )
 
     def _cancel_crop(self):
         self._in_crop_mode = False
@@ -1499,11 +1682,12 @@ class MainWindow(QMainWindow):
             return False
 
         try:
-            cache = save_crop(img_path, crop_rect)
+            cache = save_crop(img_path, crop_rect, self._viewer.get_edge_candidates())
             self._undo_cache = cache
             self._redo_cache = None
             self._btn_undo.setEnabled(True)
             self._btn_redo.setEnabled(False)
+            self._viewer.set_saved_crop_rect(crop_rect)
 
             ann_count = len(json.loads(cache["new_json"]).get("objects", [])) if cache["new_json"] else 0
             self._cancel_crop()
@@ -1538,6 +1722,25 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
             return False
+
+    def _autosave_crop_if_needed(self):
+        if not self._in_crop_mode:
+            return
+        crop_rect = self._viewer.get_crop_rect()
+        if crop_rect is None:
+            return
+        img_path = self._viewer.get_image_path()
+        if img_path is None:
+            return
+        try:
+            save_crop(img_path, crop_rect, self._viewer.get_edge_candidates())
+            self._viewer.set_saved_crop_rect(crop_rect)
+            self._status.showMessage(
+                f"已自动保存超声区域  X:{int(crop_rect.x())} Y:{int(crop_rect.y())}  "
+                f"W:{int(crop_rect.width())} H:{int(crop_rect.height())}"
+            )
+        except Exception as e:
+            self._status.showMessage(f"自动保存失败：{e}")
 
     def _confirm_crop_and_open_next_uncropped(self):
         if not self._do_save_crop(open_next_uncropped=True):
