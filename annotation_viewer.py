@@ -10,13 +10,15 @@ import copy
 from enum import Enum
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QTreeWidget, QTreeWidgetItem, QGraphicsView, QGraphicsScene,
     QGraphicsPolygonItem, QGraphicsPixmapItem, QGraphicsTextItem,
     QGraphicsRectItem, QGraphicsPathItem,
     QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QToolBar, QStatusBar, QFrame, QPushButton, QSizePolicy,
+    QToolBar, QStatusBar, QFrame, QPushButton, QSizePolicy, QDoubleSpinBox,
     QMessageBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
@@ -49,6 +51,7 @@ LABEL_FONT_SIZE = 9
 
 HANDLE_SIZE = 10   # 控制点正方形边长（像素，视口坐标）
 HANDLE_NAMES = ["TL", "T", "TR", "R", "BR", "B", "BL", "L"]
+CANDIDATE_CLICK_BAND = 54
 
 
 # ── 颜色映射 ──────────────────────────────────────────────────────────────────
@@ -87,6 +90,265 @@ def collect_all_labels() -> list[str]:
     except Exception:
         pass
     return result
+
+
+def polygon_area(points: list[list[float]]) -> float:
+    if len(points) < 3:
+        return 0.0
+    area = 0.0
+    for i, (x1, y1) in enumerate(points):
+        x2, y2 = points[(i + 1) % len(points)]
+        area += x1 * y2 - x2 * y1
+    return abs(area) * 0.5
+
+
+def polygon_bbox(points: list[list[float]]) -> list[float]:
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def smooth_profile(values: np.ndarray, window: int) -> np.ndarray:
+    if len(values) == 0:
+        return values.astype(np.float32)
+    window = max(3, int(window) | 1)
+    kernel = np.ones(window, dtype=np.float32) / window
+    return np.convolve(values.astype(np.float32), kernel, mode="same")
+
+
+def normalize_profile(values: np.ndarray) -> np.ndarray:
+    if len(values) == 0:
+        return values.astype(np.float32)
+    lo = float(values.min())
+    hi = float(values.max())
+    if hi - lo < 1e-6:
+        return np.zeros_like(values, dtype=np.float32)
+    return ((values - lo) / (hi - lo)).astype(np.float32)
+
+
+def find_runs(mask: np.ndarray) -> list[tuple[int, int]]:
+    runs: list[tuple[int, int]] = []
+    start: int | None = None
+    for idx, flag in enumerate(mask.tolist()):
+        if flag and start is None:
+            start = idx
+        elif not flag and start is not None:
+            runs.append((start, idx - 1))
+            start = None
+    if start is not None:
+        runs.append((start, len(mask) - 1))
+    return runs
+
+
+def estimate_foreground_range(profile: np.ndarray, active_ratio: float = 0.1) -> tuple[int, int]:
+    if len(profile) == 0:
+        raise ValueError("空轮廓，无法估计前景范围")
+    positive = profile[profile > 0]
+    if len(positive) == 0:
+        raise ValueError("图像几乎全黑，无法自动框选")
+
+    percentile = max(0.0, min(100.0, (1.0 - active_ratio) * 100.0))
+    threshold = float(np.percentile(positive, percentile))
+    active = profile >= threshold
+    runs = find_runs(active)
+    if not runs:
+        raise ValueError("未找到稳定前景区域")
+
+    gap_limit = max(6, len(profile) // 80)
+    merged: list[tuple[int, int]] = []
+    cur_start, cur_end = runs[0]
+    for start, end in runs[1:]:
+        if start - cur_end <= gap_limit:
+            cur_end = end
+        else:
+            merged.append((cur_start, cur_end))
+            cur_start, cur_end = start, end
+    merged.append((cur_start, cur_end))
+
+    center = (len(profile) - 1) * 0.5
+    start, end = max(
+        merged,
+        key=lambda run: float(profile[run[0]:run[1] + 1].sum()) - abs(((run[0] + run[1]) * 0.5) - center) * threshold * 0.1,
+    )
+    return start, end
+
+
+def scan_edge_by_jump(
+    profile: np.ndarray,
+    start: int,
+    stop: int,
+    step: int,
+    jump_ratio: float,
+    normalize_by: int,
+) -> int:
+    prev = int(profile[start])
+    last_hit: int | None = None
+    best_idx = start
+    best_delta = float("-inf")
+    scale = max(int(normalize_by), 1)
+
+    for idx in range(start + step, stop, step):
+        cur = int(profile[idx])
+        delta = cur - prev
+        ratio = delta / scale
+        if ratio >= jump_ratio:
+            last_hit = idx
+        if delta > best_delta:
+            best_delta = float(delta)
+            best_idx = idx
+        prev = cur
+
+    return last_hit if last_hit is not None else best_idx
+
+
+def collect_edge_candidates(
+    profile: np.ndarray,
+    start: int,
+    stop: int,
+    step: int,
+    jump_ratio: float,
+    normalize_by: int,
+    fallback_idx: int,
+) -> list[int]:
+    if len(profile) == 0:
+        return [fallback_idx]
+    prev = int(profile[start])
+    scale = max(int(normalize_by), 1)
+    candidates: list[int] = []
+    deltas: list[tuple[float, int]] = []
+    for idx in range(start + step, stop, step):
+        cur = int(profile[idx])
+        delta = cur - prev
+        ratio = delta / scale
+        if ratio >= jump_ratio:
+            candidates.append(idx)
+        if delta > 0:
+            deltas.append((float(delta), idx))
+        prev = cur
+
+    # 阈值命中的点太少时，补充若干个局部跳变最强的位置，保证可切换候选边界。
+    if len(candidates) < 3 and deltas:
+        min_gap = max(6, len(profile) // 40)
+        for _, idx in sorted(deltas, key=lambda item: item[0], reverse=True):
+            if all(abs(idx - existing) >= min_gap for existing in candidates):
+                candidates.append(idx)
+            if len(candidates) >= 8:
+                break
+
+    if fallback_idx not in candidates:
+        candidates.append(fallback_idx)
+    return sorted(set(candidates))
+
+
+def pick_central_run(profile: np.ndarray, min_len: int, center: float) -> tuple[int, int] | None:
+    active = profile >= 0.28
+    runs = [run for run in find_runs(active) if run[1] - run[0] + 1 >= min_len]
+    if not runs:
+        active = profile >= 0.18
+        runs = [run for run in find_runs(active) if run[1] - run[0] + 1 >= max(8, min_len // 2)]
+    if not runs:
+        return None
+    return max(
+        runs,
+        key=lambda run: (run[1] - run[0] + 1) - abs(((run[0] + run[1]) * 0.5) - center) * 0.45,
+    )
+
+
+def refine_edge(profile: np.ndarray, anchor: int, prefer_rising: bool, radius: int) -> int:
+    if len(profile) < 3:
+        return anchor
+    left = max(1, anchor - radius)
+    right = min(len(profile) - 2, anchor + radius)
+    if right < left:
+        return anchor
+    grad = np.diff(profile)
+    segment = grad[left - 1:right]
+    offset = int(np.argmax(segment) if prefer_rising else np.argmin(segment))
+    return left + offset
+
+
+def detect_ultrasound_geometry(image_path: Path, jump_ratio: float = 0.25) -> dict:
+    image_bytes = np.fromfile(str(image_path), dtype=np.uint8)
+    image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"无法读取图片: {image_path}")
+
+    h, w = image.shape[:2]
+    if h < 32 or w < 32:
+        raise ValueError("图片尺寸过小，无法自动框选")
+
+    mask = np.any(image >= 2, axis=2).astype(np.int32)
+    center_x0 = int(w * 0.20)
+    center_x1 = max(center_x0 + 1, int(w * 0.80))
+    center_y0 = int(h * 0.20)
+    center_y1 = max(center_y0 + 1, int(h * 0.80))
+
+    center_mask = mask[center_y0:center_y1, center_x0:center_x1]
+    row_profile_center = center_mask.sum(axis=1)
+    col_profile_center = center_mask.sum(axis=0)
+
+    rough_top_rel, rough_bottom_rel = estimate_foreground_range(row_profile_center, active_ratio=0.1)
+    rough_left_rel, rough_right_rel = estimate_foreground_range(col_profile_center, active_ratio=0.1)
+    rough_top = center_y0 + rough_top_rel
+    rough_bottom = center_y0 + rough_bottom_rel
+    rough_left = center_x0 + rough_left_rel
+    rough_right = center_x0 + rough_right_rel
+
+    edge_exclude_x = int(w * 0.10)
+    row_x0 = max(edge_exclude_x, rough_left)
+    row_x1 = min(w - edge_exclude_x - 1, rough_right)
+    if row_x1 <= row_x0:
+        row_x0 = rough_left
+        row_x1 = rough_right
+
+    row_profile = mask[:, row_x0:row_x1 + 1].sum(axis=1)
+    col_profile = mask[rough_top:rough_bottom + 1, :].sum(axis=0)
+
+    fg_top, fg_bottom = estimate_foreground_range(row_profile, active_ratio=0.1)
+    fg_left, fg_right = estimate_foreground_range(col_profile, active_ratio=0.1)
+
+    edge_exclude_scan_x = int(w * 0.05)
+    left_start = min(edge_exclude_scan_x, max(0, w - 2))
+    right_start = max(0, w - edge_exclude_scan_x - 1)
+
+    left = scan_edge_by_jump(col_profile, left_start, fg_left, 1, jump_ratio, h)
+    right = scan_edge_by_jump(col_profile, right_start, fg_right, -1, jump_ratio, h)
+    top = scan_edge_by_jump(row_profile, 0, fg_top, 1, jump_ratio, w)
+    bottom = scan_edge_by_jump(row_profile, h - 1, fg_bottom, -1, jump_ratio, w)
+
+    candidate_margin_x = max(8, int(w * 0.08))
+    candidate_margin_y = max(8, int(h * 0.08))
+    left_candidate_stop = min(w - 1, fg_left + candidate_margin_x)
+    right_candidate_stop = max(0, fg_right - candidate_margin_x)
+    top_candidate_stop = min(h - 1, fg_top + candidate_margin_y)
+    bottom_candidate_stop = max(0, fg_bottom - candidate_margin_y)
+
+    left_candidates = collect_edge_candidates(col_profile, left_start, left_candidate_stop, 1, jump_ratio, h, left)
+    right_candidates = collect_edge_candidates(col_profile, right_start, right_candidate_stop, -1, jump_ratio, h, right)
+    top_candidates = collect_edge_candidates(row_profile, 0, top_candidate_stop, 1, jump_ratio, w, top)
+    bottom_candidates = collect_edge_candidates(row_profile, h - 1, bottom_candidate_stop, -1, jump_ratio, w, bottom)
+
+    top = max(0, min(top, h - 2))
+    bottom = max(top + 2, min(bottom + 1, h))
+    left = max(0, min(left, w - 2))
+    right = max(left + 2, min(right + 1, w))
+
+    rect = QRectF(float(left), float(top), float(right - left), float(bottom - top))
+    if rect.width() < 32 or rect.height() < 32:
+        raise ValueError("自动框选结果过小，请手动调整")
+    return {
+        "rect": rect,
+        "candidates": {
+            "left": [int(v) for v in left_candidates if 0 <= v < w],
+            "right": [int(v) for v in right_candidates if 0 <= v < w],
+            "top": [int(v) for v in top_candidates if 0 <= v < h],
+            "bottom": [int(v) for v in bottom_candidates if 0 <= v < h],
+        },
+    }
+
+
+def detect_ultrasound_rect(image_path: Path, jump_ratio: float = 0.25) -> QRectF:
+    return detect_ultrasound_geometry(image_path, jump_ratio)["rect"]
 
 
 # ── 多边形裁剪（Sutherland-Hodgman） ──────────────────────────────────────────
@@ -135,55 +397,42 @@ def clip_polygon_to_rect(pts: list, x1: float, y1: float, x2: float, y2: float) 
 
 def save_crop(image_path: Path, crop_rect: QRectF) -> dict:
     """
-    裁剪图片并更新标注 JSON，直接覆盖原文件。
+    仅更新标注 JSON，记录超声图像矩形区域，不修改原图和分割点。
     返回 undo/redo 缓存字典：
       {path, orig_img, orig_json, new_img, new_json}
-    其中 orig_* 是覆盖前的内容，new_* 是覆盖后的内容。
+    其中图片字段保留为 None，仅为了复用现有 undo/redo 结构。
     """
     x1 = int(round(crop_rect.x()))
     y1 = int(round(crop_rect.y()))
     x2 = int(round(crop_rect.x() + crop_rect.width()))
     y2 = int(round(crop_rect.y() + crop_rect.height()))
-    cw, ch = x2 - x1, y2 - y1
-
     json_path = image_path.with_suffix(".json")
 
     # ── 先读原始内容（用于 undo）──
-    orig_img_bytes = image_path.read_bytes()
     orig_json_str  = json_path.read_text(encoding="utf-8") if json_path.exists() else None
-
-    # ── 裁剪并覆盖图片 ──
-    pixmap  = QPixmap(str(image_path))
-    cropped = pixmap.copy(x1, y1, cw, ch)
-    cropped.save(str(image_path))
 
     # ── 更新标注 JSON（覆盖原 JSON）──
     new_json_str = None
     if orig_json_str is not None:
         data     = json.loads(orig_json_str)
         new_data = copy.deepcopy(data)
-        new_data["info"]["name"]   = image_path.name
-        new_data["info"]["width"]  = cw
-        new_data["info"]["height"] = ch
-        new_objects = []
-        for obj in new_data.get("objects", []):
-            pts = obj.get("segmentation", [])
-            if len(pts) < 3:
-                continue
-            clipped = clip_polygon_to_rect(pts, x1, y1, x2, y2)
-            if len(clipped) < 3:
-                continue
-            obj["segmentation"] = [[p[0] - x1, p[1] - y1] for p in clipped]
-            new_objects.append(obj)
-        new_data["objects"] = new_objects
+        new_data["ultrasound_rect"] = {
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "width": x2 - x1,
+            "height": y2 - y1,
+        }
+        new_data["cropped"] = False
         new_json_str = json.dumps(new_data, ensure_ascii=False, indent=4)
         json_path.write_text(new_json_str, encoding="utf-8")
 
     return {
         "path":      image_path,
-        "orig_img":  orig_img_bytes,
+        "orig_img":  None,
         "orig_json": orig_json_str,
-        "new_img":   image_path.read_bytes(),   # 保存后再读，得到实际写入内容
+        "new_img":   None,
         "new_json":  new_json_str,
     }
 
@@ -209,8 +458,10 @@ class CropOverlay:
         self._overlay: QGraphicsPathItem | None = None
         self._border: QGraphicsRectItem | None = None
         self._handles: dict[str, QGraphicsRectItem] = {}
+        self._edge_hotspots: dict[str, QGraphicsPathItem] = {}
         self._img_rect = QRectF()
         self._crop_rect = QRectF()
+        self._hover_edge: str | None = None
 
     def activate(self, img_rect: QRectF, initial: QRectF | None = None):
         self.clear()
@@ -232,6 +483,14 @@ class CropOverlay:
         self._border.setZValue(11)
         self._scene.addItem(self._border)
 
+        for edge in ("left", "right", "top", "bottom"):
+            item = QGraphicsPathItem()
+            item.setPen(QPen(Qt.PenStyle.NoPen))
+            item.setBrush(QBrush(QColor(59, 130, 246, 0)))
+            item.setZValue(10.5)
+            self._scene.addItem(item)
+            self._edge_hotspots[edge] = item
+
         # 8 个控制点
         for name in HANDLE_NAMES:
             h = QGraphicsRectItem()
@@ -245,13 +504,15 @@ class CropOverlay:
             self._update_items()
 
     def clear(self):
-        for item in [self._overlay, self._border] + list(self._handles.values()):
+        for item in [self._overlay, self._border] + list(self._handles.values()) + list(self._edge_hotspots.values()):
             if item and item.scene():
                 self._scene.removeItem(item)
         self._overlay = None
         self._border = None
         self._handles.clear()
+        self._edge_hotspots.clear()
         self._crop_rect = QRectF()
+        self._hover_edge = None
 
     def set_rect(self, rect: QRectF):
         self._crop_rect = rect.normalized()
@@ -264,7 +525,7 @@ class CropOverlay:
         r = self._crop_rect.normalized()
         return r.width() > 4 and r.height() > 4
 
-    def _update_items(self):
+    def _update_items(self, click_band: float = 0.0):
         if not self._border:
             return
         r = self._crop_rect.normalized()
@@ -295,6 +556,52 @@ class CropOverlay:
         for name, (hx, hy) in positions.items():
             self._handles[name].setRect(hx - hs / 2, hy - hs / 2, hs, hs)
 
+        if click_band > 0:
+            self._update_hotspots(r, click_band)
+
+    def _update_hotspots(self, r: QRectF, click_band: float):
+        cx = r.center().x()
+        cy = r.center().y()
+
+        hotspot_paths: dict[str, QPainterPath] = {}
+
+        left_path = QPainterPath()
+        left_path.addRect(QRectF(self._img_rect.left(), self._img_rect.top(), max(1.0, r.left() - self._img_rect.left()), self._img_rect.height()))
+        left_path.moveTo(r.left(), r.top())
+        left_path.lineTo(cx, cy)
+        left_path.lineTo(r.left(), r.bottom())
+        left_path.closeSubpath()
+        hotspot_paths["left"] = left_path
+
+        right_path = QPainterPath()
+        right_path.addRect(QRectF(r.right(), self._img_rect.top(), max(1.0, self._img_rect.right() - r.right()), self._img_rect.height()))
+        right_path.moveTo(r.right(), r.top())
+        right_path.lineTo(cx, cy)
+        right_path.lineTo(r.right(), r.bottom())
+        right_path.closeSubpath()
+        hotspot_paths["right"] = right_path
+
+        top_path = QPainterPath()
+        top_path.addRect(QRectF(r.left(), self._img_rect.top(), max(1.0, r.width()), max(1.0, r.top() - self._img_rect.top())))
+        top_path.moveTo(r.left(), r.top())
+        top_path.lineTo(cx, cy)
+        top_path.lineTo(r.right(), r.top())
+        top_path.closeSubpath()
+        hotspot_paths["top"] = top_path
+
+        bottom_path = QPainterPath()
+        bottom_path.addRect(QRectF(r.left(), r.bottom(), max(1.0, r.width()), max(1.0, self._img_rect.bottom() - r.bottom())))
+        bottom_path.moveTo(r.left(), r.bottom())
+        bottom_path.lineTo(cx, cy)
+        bottom_path.lineTo(r.right(), r.bottom())
+        bottom_path.closeSubpath()
+        hotspot_paths["bottom"] = bottom_path
+
+        for edge, item in self._edge_hotspots.items():
+            item.setPath(hotspot_paths[edge])
+            color = QColor(59, 130, 246, 80 if self._hover_edge == edge else 0)
+            item.setBrush(QBrush(color))
+
     def handle_at(self, scene_pos: QPointF, tol_scene: float) -> str | None:
         """返回鼠标下的控制点名称，tol_scene 为容差（场景坐标）。"""
         for name, h in self._handles.items():
@@ -320,6 +627,30 @@ class CropOverlay:
     def move_rect(self, delta: QPointF):
         self._crop_rect.translate(delta)
         self._update_items()
+
+    def set_edge(self, edge: str, value: float):
+        r = self._crop_rect.normalized()
+        if edge == "left":
+            right = r.right()
+            value = min(value, right - 4)
+            self._crop_rect = QRectF(QPointF(value, r.top()), QPointF(right, r.bottom())).normalized()
+        elif edge == "right":
+            left = r.left()
+            value = max(value, left + 4)
+            self._crop_rect = QRectF(QPointF(left, r.top()), QPointF(value, r.bottom())).normalized()
+        elif edge == "top":
+            bottom = r.bottom()
+            value = min(value, bottom - 4)
+            self._crop_rect = QRectF(QPointF(r.left(), value), QPointF(r.right(), bottom)).normalized()
+        elif edge == "bottom":
+            top = r.top()
+            value = max(value, top + 4)
+            self._crop_rect = QRectF(QPointF(r.left(), top), QPointF(r.right(), value)).normalized()
+        self._update_items()
+
+    def set_hover_edge(self, edge: str | None, click_band: float):
+        self._hover_edge = edge
+        self._update_items(click_band)
 
 
 # ── 图片查看器（含裁剪模式） ──────────────────────────────────────────────────
@@ -360,6 +691,7 @@ class ImageViewer(QGraphicsView):
         self._drag_handle: str | None = None
         self._drag_move: bool = False
         self._last_scene_pos: QPointF | None = None
+        self._edge_candidates: dict[str, list[int]] = {"left": [], "right": [], "top": [], "bottom": []}
 
     # ── 图片加载 ──
 
@@ -456,20 +788,29 @@ class ImageViewer(QGraphicsView):
 
     # ── 裁剪模式 ──
 
-    def enter_crop_mode(self):
+    def enter_crop_mode(self, initial_rect: QRectF | None = None):
         if self._pixmap_item is None:
             return
-        self._crop_mode = CropMode.DRAWING
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.setCursor(Qt.CursorShape.CrossCursor)
         img_rect = QRectF(0, 0, *self._img_size)
-        self._crop_overlay.activate(img_rect)
+        if initial_rect is not None and initial_rect.isValid() and initial_rect.width() > 0 and initial_rect.height() > 0:
+            rect = initial_rect.intersected(img_rect)
+            self._crop_overlay.activate(img_rect, rect)
+            self._crop_overlay.set_hover_edge(None, self._candidate_click_band())
+            self._crop_mode = CropMode.ADJUSTING
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+        else:
+            self._crop_mode = CropMode.DRAWING
+            self.setCursor(Qt.CursorShape.CrossCursor)
+            self._crop_overlay.activate(img_rect)
 
     def _exit_crop_mode(self):
         self._crop_mode = CropMode.OFF
         self._drag_start = None
         self._drag_handle = None
         self._drag_move = False
+        self._edge_candidates = {"left": [], "right": [], "top": [], "bottom": []}
         self._crop_overlay.clear()
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -485,11 +826,122 @@ class ImageViewer(QGraphicsView):
     def get_image_path(self) -> Path | None:
         return self._image_path
 
+    def set_edge_candidates(self, candidates: dict[str, list[int]] | None):
+        self._edge_candidates = candidates or {"left": [], "right": [], "top": [], "bottom": []}
+
     # ── 控制点容差（从视口像素转场景坐标） ──
 
     def _handle_tol(self) -> float:
         inv, _ = self.transform().inverted()
         return inv.m11() * (HANDLE_SIZE * 0.8)
+
+    def _candidate_click_band(self) -> float:
+        inv, _ = self.transform().inverted()
+        return inv.m11() * CANDIDATE_CLICK_BAND
+
+    def _edge_hotspot_side_band(self, rect: QRectF, click_band: float) -> float:
+        return max(click_band, min(rect.width() * 0.18, click_band * 4))
+
+    def _edge_hotspot_top_band(self, rect: QRectF, click_band: float) -> float:
+        return max(click_band, min(rect.height() * 0.18, click_band * 4))
+
+    def _edge_at_click_zone(self, scene_pos: QPointF) -> str | None:
+        rect = self._crop_overlay.get_rect()
+        if not rect.isValid():
+            return None
+        img_rect = QRectF(0, 0, *self._img_size)
+        x = scene_pos.x()
+        y = scene_pos.y()
+        if not img_rect.contains(scene_pos):
+            return None
+
+        # 矩形外：外侧区域直接对应最近的外边界
+        if x < rect.left():
+            return "left"
+        if x > rect.right():
+            return "right"
+        if y < rect.top():
+            return "top"
+        if y > rect.bottom():
+            return "bottom"
+
+        # 矩形内：由两条对角线划分为 4 个三角区
+        left = rect.left()
+        top = rect.top()
+        width = rect.width()
+        height = rect.height()
+        if width <= 0 or height <= 0:
+            return None
+
+        rel_x = (x - left) / width
+        rel_y = (y - top) / height
+
+        # 相对两条对角线的位置
+        above_diag1 = rel_y <= rel_x           # y <= x
+        above_diag2 = rel_y <= 1.0 - rel_x     # y <= 1-x
+
+        if above_diag1 and above_diag2:
+            return "top"
+        if above_diag1 and not above_diag2:
+            return "right"
+        if not above_diag1 and above_diag2:
+            return "left"
+        return "bottom"
+        return None
+
+    def _refresh_hover_edge(self, scene_pos: QPointF | None):
+        click_band = self._candidate_click_band()
+        edge = self._edge_at_click_zone(scene_pos) if scene_pos is not None else None
+        self._crop_overlay.set_hover_edge(edge, click_band)
+
+    def _jump_edge_candidate(self, scene_pos: QPointF) -> bool:
+        rect = self._crop_overlay.get_rect()
+        if not rect.isValid():
+            return False
+
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+        edge = self._edge_at_click_zone(scene_pos)
+        if edge is None:
+            return False
+
+        def choose(candidates: list[int], current: float, toward_larger: bool) -> int | None:
+            if not candidates:
+                return None
+            if toward_larger:
+                larger = [c for c in candidates if c > current + 1]
+                return min(larger) if larger else None
+            smaller = [c for c in candidates if c < current - 1]
+            return max(smaller) if smaller else None
+
+        if edge == "left":
+            new_left = choose(self._edge_candidates.get("left", []), left, toward_larger=scene_pos.x() > left)
+            if new_left is not None:
+                self._crop_overlay.set_edge("left", float(new_left))
+                self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                return True
+        elif edge == "right":
+            new_right = choose(self._edge_candidates.get("right", []), right, toward_larger=scene_pos.x() > right)
+            if new_right is not None:
+                self._crop_overlay.set_edge("right", float(new_right))
+                self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                return True
+        elif edge == "top":
+            new_top = choose(self._edge_candidates.get("top", []), top, toward_larger=scene_pos.y() > top)
+            if new_top is not None:
+                self._crop_overlay.set_edge("top", float(new_top))
+                self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                return True
+        elif edge == "bottom":
+            new_bottom = choose(self._edge_candidates.get("bottom", []), bottom, toward_larger=scene_pos.y() > bottom)
+            if new_bottom is not None:
+                self._crop_overlay.set_edge("bottom", float(new_bottom))
+                self.crop_rect_changed.emit(self._crop_overlay.get_rect())
+                return True
+
+        return False
 
     # ── 鼠标事件 ──
 
@@ -501,7 +953,8 @@ class ImageViewer(QGraphicsView):
         if event.button() != Qt.MouseButton.LeftButton:
             return
 
-        scene_pos = self.mapToScene(event.pos())
+        scene_pos = self.mapToScene(event.position().toPoint())
+        ctrl_pressed = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
 
         if self._crop_mode == CropMode.DRAWING:
             self._drag_start = scene_pos
@@ -512,14 +965,21 @@ class ImageViewer(QGraphicsView):
             if handle:
                 self._drag_handle = handle
                 self.setCursor(CropOverlay.CURSORS[handle])
-            elif self._crop_overlay.get_rect().contains(scene_pos):
+            elif not ctrl_pressed and self._jump_edge_candidate(scene_pos):
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+                self._refresh_hover_edge(scene_pos)
+            elif ctrl_pressed and self._crop_overlay.get_rect().contains(scene_pos):
                 self._drag_move = True
                 self.setCursor(Qt.CursorShape.SizeAllCursor)
-            else:
+            elif ctrl_pressed:
                 # 在框外点击 → 重新画
                 self._crop_mode = CropMode.DRAWING
                 self._drag_start = scene_pos
                 self._crop_overlay.set_rect(QRectF(scene_pos, scene_pos))
+                self._refresh_hover_edge(None)
+            else:
+                self._refresh_hover_edge(scene_pos)
+                self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._last_scene_pos = scene_pos
 
@@ -528,7 +988,7 @@ class ImageViewer(QGraphicsView):
             super().mouseMoveEvent(event)
             return
 
-        scene_pos = self.mapToScene(event.pos())
+        scene_pos = self.mapToScene(event.position().toPoint())
 
         if self._crop_mode == CropMode.DRAWING and self._drag_start:
             self._crop_overlay.set_rect(QRectF(self._drag_start, scene_pos))
@@ -539,22 +999,28 @@ class ImageViewer(QGraphicsView):
                 self._last_scene_pos = scene_pos
                 return
             delta = scene_pos - self._last_scene_pos
+            ctrl_pressed = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
 
             if self._drag_handle:
                 self._crop_overlay.apply_handle_drag(self._drag_handle, delta)
+                self._refresh_hover_edge(scene_pos)
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
             elif self._drag_move:
                 self._crop_overlay.move_rect(delta)
+                self._refresh_hover_edge(scene_pos)
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
             else:
                 # 悬停时更新光标
                 handle = self._crop_overlay.handle_at(scene_pos, self._handle_tol())
                 if handle:
+                    self._refresh_hover_edge(None)
                     self.setCursor(CropOverlay.CURSORS[handle])
-                elif self._crop_overlay.get_rect().contains(scene_pos):
+                elif ctrl_pressed and self._crop_overlay.get_rect().contains(scene_pos):
+                    self._refresh_hover_edge(None)
                     self.setCursor(Qt.CursorShape.SizeAllCursor)
                 else:
-                    self.setCursor(Qt.CursorShape.CrossCursor)
+                    self._refresh_hover_edge(scene_pos)
+                    self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._last_scene_pos = scene_pos
 
@@ -605,6 +1071,7 @@ class FileTree(QTreeWidget):
 
     def populate(self, data_root: Path):
         self.clear()
+        self._filter_uncropped = False
         if not data_root.exists():
             return
         for disease_dir in sorted(data_root.iterdir()):
@@ -616,6 +1083,39 @@ class FileTree(QTreeWidget):
             disease_item.setData(0, Qt.ItemDataRole.UserRole + 1, disease_dir)
             QTreeWidgetItem(disease_item, [""]).setData(0, Qt.ItemDataRole.UserRole, "__placeholder__")
         self.itemExpanded.connect(self._on_expand)
+
+    @staticmethod
+    def _is_cropped(img_path: Path) -> bool:
+        json_path = img_path.with_suffix(".json")
+        if not json_path.exists():
+            return False
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                d = json.load(f)
+            return "ultrasound_rect" in d
+        except Exception:
+            return False
+
+    def set_filter_uncropped(self, enabled: bool):
+        """开启/关闭「仅显示未裁剪」过滤器，对已展开的节点立即生效。"""
+        self._filter_uncropped = enabled
+        root = self.invisibleRootItem()
+        for di in range(root.childCount()):
+            disease_item = root.child(di)
+            for pi in range(disease_item.childCount()):
+                patient_item = disease_item.child(pi)
+                has_visible = False
+                for ii in range(patient_item.childCount()):
+                    img_item = patient_item.child(ii)
+                    img_path = img_item.data(0, Qt.ItemDataRole.UserRole)
+                    if isinstance(img_path, Path):
+                        hide = enabled and self._is_cropped(img_path)
+                        img_item.setHidden(hide)
+                        if not hide:
+                            has_visible = True
+                # 患者文件夹：若无可见图片则隐藏
+                if patient_item.childCount() > 0:
+                    patient_item.setHidden(enabled and not has_visible)
 
     def _on_expand(self, item: QTreeWidgetItem):
         if item.childCount() == 1:
@@ -633,10 +1133,17 @@ class FileTree(QTreeWidget):
                 p_item = QTreeWidgetItem(item, [display])
                 p_item.setData(0, Qt.ItemDataRole.UserRole, None)
                 p_item.setData(0, Qt.ItemDataRole.UserRole + 1, patient_dir)
+                has_visible = False
                 for img in sorted(f for f in patient_dir.iterdir()
                                   if f.suffix in IMAGE_EXTS and f.with_suffix(".json").exists()):
                     img_item = QTreeWidgetItem(p_item, [img.name])
                     img_item.setData(0, Qt.ItemDataRole.UserRole, img)
+                    if self._filter_uncropped and self._is_cropped(img):
+                        img_item.setHidden(True)
+                    else:
+                        has_visible = True
+                if self._filter_uncropped and not has_visible:
+                    p_item.setHidden(True)
 
 
 # ── 右侧信息面板 ──────────────────────────────────────────────────────────────
@@ -799,10 +1306,21 @@ class MainWindow(QMainWindow):
         # 分隔
         sep = QWidget(); sep.setFixedWidth(10); toolbar.addWidget(sep)
 
-        self._btn_crop = QPushButton("✂ 裁剪")
+        self._btn_crop = QPushButton("✂ 裁剪[回车]")
         self._btn_crop.setFixedHeight(28)
-        self._btn_crop.setMinimumWidth(80)   # 自适应宽度，不截断
+        self._btn_crop.setMinimumWidth(120)
         toolbar.addWidget(self._btn_crop)
+        self._btn_auto_crop = tbtn("自动框选(\\)", 100)
+        toolbar.addWidget(QLabel("跳变阈值"))
+        self._spin_auto_jump = QDoubleSpinBox()
+        self._spin_auto_jump.setDecimals(0)
+        self._spin_auto_jump.setRange(5, 500)
+        self._spin_auto_jump.setSingleStep(5)
+        self._spin_auto_jump.setSuffix("%")
+        self._spin_auto_jump.setValue(25)
+        self._spin_auto_jump.setFixedHeight(28)
+        self._spin_auto_jump.setFixedWidth(78)
+        toolbar.addWidget(self._spin_auto_jump)
         self._btn_cancel = tbtn("✕ 取消", 70)
         self._btn_cancel.setVisible(False)
         self._in_crop_mode = False
@@ -814,20 +1332,35 @@ class MainWindow(QMainWindow):
         self._btn_undo.setEnabled(False)
         self._btn_redo.setEnabled(False)
 
+        sep3 = QWidget(); sep3.setFixedWidth(10); toolbar.addWidget(sep3)
+
+        self._btn_filter = tbtn("仅未裁剪", 80)
+        self._btn_filter.setCheckable(True)
+        self._btn_filter.setChecked(False)
+
         self._undo_cache: dict | None = None   # 上一次裁剪的缓存
         self._redo_cache: dict | None = None   # 撤回后可恢复的缓存
+        self._nav_direction: int = 0            # 导航方向：-1上 / 1下 / 0点击
 
         self._btn_ann.clicked.connect(self._toggle_ann)
         self._btn_lbl.clicked.connect(self._toggle_lbl)
         self._btn_crop.clicked.connect(self._on_crop_btn)
+        self._btn_auto_crop.clicked.connect(self._on_auto_crop_btn)
         self._btn_cancel.clicked.connect(self._cancel_crop)
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
+        self._btn_filter.clicked.connect(self._toggle_filter)
 
         # 回车快捷键：窗口级别，焦点在任何子控件时均生效
         enter_sc = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
         enter_sc.setContext(Qt.ShortcutContext.WindowShortcut)
         enter_sc.activated.connect(self._on_crop_btn)
+        auto_crop_sc = QShortcut(QKeySequence("\\"), self)
+        auto_crop_sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        auto_crop_sc.activated.connect(self._on_auto_crop_btn)
+        crop_next_sc = QShortcut(QKeySequence("'"), self)
+        crop_next_sc.setContext(Qt.ShortcutContext.WindowShortcut)
+        crop_next_sc.activated.connect(self._confirm_crop_and_open_next_uncropped)
 
         self._refresh_styles()
 
@@ -838,8 +1371,7 @@ class MainWindow(QMainWindow):
         self._tree = FileTree()
         self._tree.setMinimumWidth(180); self._tree.setMaximumWidth(300)
         self._tree.populate(DATA_ROOT)
-        self._tree.itemClicked.connect(self._on_tree_click)
-        self._tree.currentItemChanged.connect(lambda cur, _: self._on_tree_click(cur, 0) if cur else None)
+        self._tree.currentItemChanged.connect(self._on_tree_item_changed)
         splitter.addWidget(self._tree)
 
         self._viewer = ImageViewer()
@@ -874,7 +1406,7 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
         # 重置裁剪按钮状态
         self._in_crop_mode = False
-        self._btn_crop.setText("✂ 裁剪")
+        self._btn_crop.setText("✂ 裁剪[回车]")
         self._btn_cancel.setVisible(False)
         self._refresh_styles()
 
@@ -899,7 +1431,7 @@ class MainWindow(QMainWindow):
                 self._status.showMessage("请先选择一张图片")
                 return
             self._in_crop_mode = True
-            self._btn_crop.setText("✓ 确认裁剪")
+            self._btn_crop.setText("✓ 确认裁剪[回车]")
             self._btn_cancel.setVisible(True)
             self._viewer.enter_crop_mode()
             self._status.showMessage("拖拽画出裁剪区域，8个控制点可调整边界 | 空格/再次点击确认  ESC/取消按钮退出")
@@ -907,10 +1439,35 @@ class MainWindow(QMainWindow):
             self._do_save_crop()
         self._refresh_styles()
 
+    def _on_auto_crop_btn(self):
+        img_path = self._viewer.get_image_path()
+        if img_path is None:
+            self._status.showMessage("请先选择一张图片")
+            return
+        try:
+            jump_ratio = self._spin_auto_jump.value() / 100.0
+            geometry = detect_ultrasound_geometry(img_path, jump_ratio=jump_ratio)
+            crop_rect = geometry["rect"]
+            self._in_crop_mode = True
+            self._btn_crop.setText("✓ 确认裁剪[回车]")
+            self._btn_cancel.setVisible(True)
+            self._viewer.enter_crop_mode(crop_rect)
+            self._viewer.set_edge_candidates(geometry.get("candidates"))
+            self._panel.update_crop_info(crop_rect)
+            self._status.showMessage(
+                f"自动框选完成  X:{int(crop_rect.x())} Y:{int(crop_rect.y())}  "
+                f"W:{int(crop_rect.width())} H:{int(crop_rect.height())}  阈值:{self._spin_auto_jump.value():.0f}%   |   可点击边界两侧切换候选边界，或拖动微调后确认"
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "自动框选失败", str(e))
+            self._status.showMessage(f"自动框选失败：{e}")
+        self._refresh_styles()
+
     def _cancel_crop(self):
         self._in_crop_mode = False
-        self._btn_crop.setText("✂ 裁剪")
+        self._btn_crop.setText("✂ 裁剪[回车]")
         self._btn_cancel.setVisible(False)
+        self._viewer.set_edge_candidates(None)
         self._viewer.cancel_crop()
         self._panel.update_crop_info(None)
         self._refresh_styles()
@@ -924,21 +1481,22 @@ class MainWindow(QMainWindow):
                 f"W:{int(rect.width())} H:{int(rect.height())}   |   Enter/保存裁剪 确认  ESC 取消"
             )
 
-    def _do_save_crop(self):
+    def _do_save_crop(self, open_next_uncropped: bool = False) -> bool:
         crop_rect = self._viewer.get_crop_rect()
         if crop_rect is None:
             self._status.showMessage("请先框选裁剪区域")
-            return
+            return False
         img_path = self._viewer.get_image_path()
         if img_path is None:
-            return
+            return False
+        current_item = self._tree.currentItem()
 
         # 限制裁剪框在图片范围内
         w, h = self._viewer._img_size
         crop_rect = crop_rect.intersected(QRectF(0, 0, w, h))
         if crop_rect.width() < 4 or crop_rect.height() < 4:
             self._status.showMessage("裁剪区域太小，请重新选择")
-            return
+            return False
 
         try:
             cache = save_crop(img_path, crop_rect)
@@ -951,11 +1509,42 @@ class MainWindow(QMainWindow):
             self._cancel_crop()
             self._reload_image(img_path)
             self._status.showMessage(
-                f"裁剪完成  {int(crop_rect.width())} × {int(crop_rect.height())}  "
-                f"保留标注 {ann_count} 个  |  {img_path.name}   [↩ 可撤回]"
+                f"已记录超声区域  {int(crop_rect.width())} × {int(crop_rect.height())}  "
+                f"图中标注 {ann_count} 个  |  {img_path.name}   [↩ 可撤回]"
             )
+            # 过滤器开启时，裁剪完自动隐藏当前图片并跳到下一张
+            if self._btn_filter.isChecked() and current_item:
+                cur = self._tree.currentItem()
+                if cur:
+                    cur.setHidden(True)
+                    parent = cur.parent()
+                    if parent:
+                        has_visible = any(
+                            not parent.child(i).isHidden()
+                            for i in range(parent.childCount())
+                        )
+                        if not has_visible:
+                            parent.setHidden(True)
+                if not open_next_uncropped:
+                    self._tree_navigate(1)
+            if open_next_uncropped and current_item:
+                next_item = self._find_next_uncropped_item(current_item)
+                if next_item:
+                    self._tree.setCurrentItem(next_item)
+                    self._tree.scrollToItem(next_item)
+                else:
+                    self._status.showMessage("裁剪完成，后面没有未裁剪图片了")
+            return True
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
+            return False
+
+    def _confirm_crop_and_open_next_uncropped(self):
+        if not self._do_save_crop(open_next_uncropped=True):
+            return
+        next_path = self._viewer.get_image_path()
+        if next_path is not None and not self._tree._is_cropped(next_path):
+            self._on_auto_crop_btn()
 
     def _reload_image(self, img_path: Path):
         """重新加载图片并刷新右侧面板。"""
@@ -970,7 +1559,8 @@ class MainWindow(QMainWindow):
         if not self._undo_cache:
             return
         c = self._undo_cache
-        c["path"].write_bytes(c["orig_img"])
+        if c["orig_img"] is not None:
+            c["path"].write_bytes(c["orig_img"])
         if c["orig_json"] is not None:
             c["path"].with_suffix(".json").write_text(c["orig_json"], encoding="utf-8")
         self._redo_cache = c
@@ -984,7 +1574,8 @@ class MainWindow(QMainWindow):
         if not self._redo_cache:
             return
         c = self._redo_cache
-        c["path"].write_bytes(c["new_img"])
+        if c["new_img"] is not None:
+            c["path"].write_bytes(c["new_img"])
         if c["new_json"] is not None:
             c["path"].with_suffix(".json").write_text(c["new_json"], encoding="utf-8")
         self._undo_cache = c
@@ -994,21 +1585,113 @@ class MainWindow(QMainWindow):
         self._reload_image(c["path"])
         self._status.showMessage(f"已恢复裁剪  |  {c['path'].name}   [↩ 可撤回]")
 
+    def _on_tree_item_changed(self, cur: QTreeWidgetItem, prev: QTreeWidgetItem):
+        """当前选中项变化时触发：图片则加载，文件夹则自动展开并选边界图片。"""
+        if cur is None:
+            return
+        img_path = cur.data(0, Qt.ItemDataRole.UserRole)
+        if isinstance(img_path, Path):
+            # 图片节点 — 直接加载
+            self._on_tree_click(cur, 0)
+        else:
+            # 文件夹节点 — 自动展开，按导航方向选第一张或最后一张
+            if not cur.isExpanded():
+                cur.setExpanded(True)
+            if self._nav_direction == -1:
+                target = self._last_image_child(cur)
+            else:
+                target = self._first_image_child(cur)
+            if target:
+                self._tree.setCurrentItem(target)
+                self._tree.scrollToItem(target)
+
     def _tree_navigate(self, direction: int):
         """上下键导航文件树（从图像区域触发）。"""
         cur = self._tree.currentItem()
         nxt = self._tree.itemAbove(cur) if direction == -1 else self._tree.itemBelow(cur)
         if nxt is None:
             return
-        # 如果下一项是文件夹，自动展开并跳到第一个图片
-        if direction == 1 and not isinstance(nxt.data(0, Qt.ItemDataRole.UserRole), Path):
-            nxt.setExpanded(True)   # 触发懒加载（_on_expand 同步执行）
-            # 找第一个图片子节点
-            first_img = self._first_image_child(nxt)
-            if first_img:
-                nxt = first_img
+        # 按上键时，itemAbove 可能返回当前项的父文件夹（视觉上紧挨着）。
+        # 这种情况下要跳过父节点，继续往上，否则会留在同一文件夹里。
+        if direction == -1 and nxt is cur.parent():
+            nxt = self._tree.itemAbove(nxt)
+            if nxt is None:
+                return
+        self._nav_direction = direction
         self._tree.setCurrentItem(nxt)
         self._tree.scrollToItem(nxt)
+        self._nav_direction = 0
+
+    def _find_next_uncropped_item(self, start_item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        item = start_item
+        while True:
+            item = self._next_tree_item(item)
+            if item is None:
+                return None
+            img_path = item.data(0, Qt.ItemDataRole.UserRole)
+            if isinstance(img_path, Path) and not self._tree._is_cropped(img_path):
+                return item
+
+    def _next_tree_item(self, item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        if item is None:
+            return None
+
+        if item.data(0, Qt.ItemDataRole.UserRole) is None:
+            if not item.isExpanded():
+                item.setExpanded(True)
+            first_child = self._first_real_child(item)
+            if first_child:
+                return first_child
+
+        sibling = self._next_sibling(item)
+        if sibling:
+            return sibling
+
+        parent = item.parent()
+        while parent is not None:
+            sibling = self._next_sibling(parent)
+            if sibling:
+                return sibling
+            parent = parent.parent()
+
+        root = self._tree.invisibleRootItem()
+        return self._next_top_level_after(item, root)
+
+    @staticmethod
+    def _first_real_child(item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        for i in range(item.childCount()):
+            child = item.child(i)
+            role = child.data(0, Qt.ItemDataRole.UserRole)
+            if role == "__placeholder__":
+                continue
+            return child
+        return None
+
+    @staticmethod
+    def _next_sibling(item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        parent = item.parent()
+        if parent is None:
+            return None
+        index = parent.indexOfChild(item)
+        for i in range(index + 1, parent.childCount()):
+            sibling = parent.child(i)
+            role = sibling.data(0, Qt.ItemDataRole.UserRole)
+            if role == "__placeholder__":
+                continue
+            return sibling
+        return None
+
+    def _next_top_level_after(self, item: QTreeWidgetItem, root: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        cursor = item
+        while cursor.parent() is not None:
+            cursor = cursor.parent()
+        index = root.indexOfChild(cursor)
+        for i in range(index + 1, root.childCount()):
+            sibling = root.child(i)
+            first = self._first_real_child(sibling)
+            if first is not None:
+                return first
+        return None
 
     def _first_image_child(self, item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
         """递归找 item 下第一个图片节点（UserRole 是 Path 的节点）。"""
@@ -1019,6 +1702,18 @@ class MainWindow(QMainWindow):
             # 子项也是文件夹，继续向下找
             child.setExpanded(True)
             found = self._first_image_child(child)
+            if found:
+                return found
+        return None
+
+    def _last_image_child(self, item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        """递归找 item 下最后一个图片节点。"""
+        for i in range(item.childCount() - 1, -1, -1):
+            child = item.child(i)
+            if isinstance(child.data(0, Qt.ItemDataRole.UserRole), Path):
+                return child
+            child.setExpanded(True)
+            found = self._last_image_child(child)
             if found:
                 return found
         return None
@@ -1035,6 +1730,11 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
+    def _toggle_filter(self):
+        enabled = self._btn_filter.isChecked()
+        self._tree.set_filter_uncropped(enabled)
+        self._refresh_styles()
+
     def _refresh_styles(self):
         self._btn_ann.setStyleSheet(BTN_ACTIVE if self._btn_ann.isChecked() else BTN_NORMAL)
         self._btn_lbl.setStyleSheet(BTN_ACTIVE if self._btn_lbl.isChecked() else BTN_NORMAL)
@@ -1042,6 +1742,7 @@ class MainWindow(QMainWindow):
         self._btn_cancel.setStyleSheet(BTN_NORMAL)
         self._btn_undo.setStyleSheet(BTN_NORMAL)
         self._btn_redo.setStyleSheet(BTN_NORMAL)
+        self._btn_filter.setStyleSheet(BTN_ACTIVE if self._btn_filter.isChecked() else BTN_NORMAL)
 
 
 # ── 入口 ──────────────────────────────────────────────────────────────────────
