@@ -1,0 +1,31 @@
+experiment_id: exp_2026-04_fullimage_legacy_baseline
+parent_experiment: null
+status: archived
+task: disease_classification_and_segmentation
+input_mode: full_image
+roi_source: none
+split_version: legacy_current_project_split
+code_commit: a89d7b4ecf57194ecb3aa431b6fa8bd496810cbb
+dataset_root: workspace/data/raw/膝关节已标注
+derived_data:
+  - workspace/data/shared_derived/cleaned
+  - workspace/data/shared_derived/coco
+  - workspace/data/shared_derived/yolo_seg
+  - workspace/data/shared_derived/nnunet
+  - workspace/data/shared_derived/medsam
+key_scripts:
+  - tools/02_split_dataset.py
+  - tools/07_train_yolo.py
+  - tools/09_train_classifier.py
+  - tools/10_train_medsam.py
+  - tools/11_evaluate.py
+  - tools/12_inference.py
+artifacts_root: workspace/experiments/archive/exp_2026-04_fullimage_legacy_baseline/artifacts
+metrics:
+  - accuracy
+  - f1_macro
+  - f1_weighted
+  - confusion_matrix
+summary: >
+  当前仓库内历史实验默认使用全图输入做疾病分类、分割和推理。
+  本归档实验为后续 ROI-only 分类实验提供基线参考。

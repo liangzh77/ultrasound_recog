@@ -1,0 +1,27 @@
+experiment_id: exp_2026-04_roi_only_cls
+parent_experiment: exp_2026-04_fullimage_legacy_baseline
+status: active
+task: disease_classification
+input_mode: roi_only
+roi_source: manual_ultrasound_rect
+split_version: reuse_legacy_patient_split_until_rebuilt
+code_commit: a89d7b4ecf57194ecb3aa431b6fa8bd496810cbb
+dataset_root: workspace/data/raw/膝关节已标注
+derived_dataset: pending
+key_scripts:
+  - tools/02_split_dataset.py
+  - tools/09_train_classifier.py
+  - tools/11_evaluate.py
+  - tools/12_inference.py
+planned_outputs:
+  - workspace/experiments/active/exp_2026-04_roi_only_cls/artifacts/checkpoints
+  - workspace/experiments/active/exp_2026-04_roi_only_cls/artifacts/metrics
+  - workspace/experiments/active/exp_2026-04_roi_only_cls/artifacts/figures
+  - workspace/experiments/active/exp_2026-04_roi_only_cls/artifacts/predictions
+metrics:
+  - accuracy
+  - f1_macro
+  - f1_weighted
+  - confusion_matrix
+primary_question: >
+  只使用人工标注的超声 ROI 区域，是否优于历史全图输入的疾病分类基线。

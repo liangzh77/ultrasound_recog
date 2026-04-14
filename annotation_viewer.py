@@ -28,11 +28,12 @@ from PySide6.QtGui import (
     QWheelEvent, QIcon, QPainterPath, QCursor, QShortcut, QKeySequence,
 )
 
+from src.common_paths import RAW_LABEL_DIR, REGISTRY_DIR
+
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 
-DATA_ROOT   = Path(__file__).parent / "data" / "膝关节已标注"
-CROP_ROOT   = Path(__file__).parent / "data" / "裁剪结果"
-LABEL_CACHE = Path(__file__).parent / ".label_cache.json"
+DATA_ROOT   = RAW_LABEL_DIR
+LABEL_CACHE = REGISTRY_DIR / "annotation_viewer_label_cache.json"
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".JPG", ".JPEG", ".PNG", ".BMP"}
 

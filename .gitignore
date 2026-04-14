@@ -1,21 +1,16 @@
-﻿data/**/*
-!data/**/
-!data/**/*.json
-data/category_mapping.json
-data/clean_report.json
-
 __pycache__/
 *.pyc
 *.pt
 *.pth
-runs/*/weights/
-runs/segment/
 
-# 训练产物（大文件）
-runs/nnunet/
-runs/yolo_seg/
-runs/classifier/
-runs/medsam/
+workspace/data/raw/
+workspace/data/shared_derived/
+workspace/data/registry/
+workspace/experiments/*/*/logs/
+workspace/experiments/*/*/artifacts/**
+!workspace/experiments/*/*/artifacts/
+!workspace/experiments/*/*/artifacts/README.md
+assets/pretrained/
 
 # 临时文件
 nul

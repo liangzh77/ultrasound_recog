@@ -1,0 +1,18 @@
+# Experiment Template
+
+新实验建议复制以下最小结构：
+
+```text
+exp_xxx/
+├─ README.md
+├─ manifest.yaml
+├─ notes.md
+└─ artifacts/
+```
+
+如果实验已经开始产出正式结果，再在 `artifacts/` 下细分：
+
+- `checkpoints/`
+- `metrics/`
+- `figures/`
+- `predictions/`
