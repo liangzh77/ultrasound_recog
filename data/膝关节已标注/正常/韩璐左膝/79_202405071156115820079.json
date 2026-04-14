@@ -1,0 +1,48 @@
+{
+    "info": {
+        "description": "ISAT",
+        "folder": "C:/Users/CHUJIAO/Desktop/膝关节超声/数据/正常/韩璐左膝",
+        "name": "79_202405071156115820079.jpg",
+        "width": 1280,
+        "height": 960,
+        "depth": 3,
+        "note": ""
+    },
+    "objects": [],
+    "ultrasound_rect": {
+        "x1": 250,
+        "y1": 135,
+        "x2": 1029,
+        "y2": 741,
+        "width": 779,
+        "height": 606
+    },
+    "ultrasound_candidates": {
+        "left": [
+            250,
+            348,
+            412,
+            479
+        ],
+        "right": [
+            964,
+            1028,
+            1126,
+            1169,
+            1203
+        ],
+        "top": [
+            135,
+            139,
+            207
+        ],
+        "bottom": [
+            611,
+            635,
+            659,
+            685,
+            715,
+            740
+        ]
+    }
+}

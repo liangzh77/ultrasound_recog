@@ -1,0 +1,44 @@
+{
+    "info": {
+        "description": "ISAT",
+        "folder": "C:/Users/CHUJIAO/Desktop/膝关节超声/数据/膝关节2025/类风湿性关节炎/901481153_任素洁",
+        "name": "任素洁_62232484.jpg",
+        "width": 1280,
+        "height": 960,
+        "depth": 3,
+        "note": ""
+    },
+    "objects": [],
+    "ultrasound_rect": {
+        "x1": 296,
+        "y1": 136,
+        "x2": 984,
+        "y2": 665,
+        "width": 688,
+        "height": 529
+    },
+    "ultrasound_candidates": {
+        "left": [
+            296,
+            300
+        ],
+        "right": [
+            978,
+            983,
+            1109,
+            1143,
+            1177,
+            1209
+        ],
+        "top": [
+            136,
+            141
+        ],
+        "bottom": [
+            581,
+            637,
+            664,
+            688
+        ]
+    }
+}

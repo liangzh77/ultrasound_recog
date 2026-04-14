@@ -1,4 +1,9 @@
-﻿data
+﻿data/**/*
+!data/**/
+!data/**/*.json
+data/category_mapping.json
+data/clean_report.json
+
 __pycache__/
 *.pyc
 *.pt

@@ -1,0 +1,45 @@
+{
+    "info": {
+        "description": "ISAT",
+        "folder": "C:/Users/CHUJIAO/Desktop/膝关节超声/数据/正常/N-WWGE左膝",
+        "name": "61_202501061618156310061.jpg",
+        "width": 1280,
+        "height": 960,
+        "depth": 3,
+        "note": ""
+    },
+    "objects": [],
+    "ultrasound_rect": {
+        "x1": 194,
+        "y1": 139,
+        "x2": 1085,
+        "y2": 598,
+        "width": 891,
+        "height": 459
+    },
+    "ultrasound_candidates": {
+        "left": [
+            194
+        ],
+        "right": [
+            947,
+            981,
+            1015,
+            1049,
+            1084,
+            1154,
+            1199
+        ],
+        "top": [
+            132,
+            139,
+            203
+        ],
+        "bottom": [
+            515,
+            571,
+            597,
+            638
+        ]
+    }
+}
