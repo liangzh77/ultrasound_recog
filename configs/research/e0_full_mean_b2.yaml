@@ -1,0 +1,32 @@
+experiment_code: E0
+input_mode: full
+seed: 20260724
+data:
+  output_size: 384
+  max_instances_train: 6
+  patient_batch_size: 1
+  effective_patient_batch_size: 8
+  num_workers: 2
+model:
+  name: efficientnet_b2.ra_in1k
+  pretrained: true
+  num_classes: 6
+  dropout: 0.30
+optimizer:
+  name: AdamW
+  encoder_lr: 0.0001
+  head_lr: 0.0003
+  weight_decay: 0.0001
+  gradient_clip: 1.0
+training:
+  max_epochs: 60
+  warmup_epochs: 3
+  early_stopping_patience: 10
+  early_stopping_metric: macro_f1
+  amp: true
+  pilot_epochs: 5
+runtime:
+  target_hours: 10.0
+  soft_limit_hours: 11.5
+  hard_limit_hours: 23.5
+  max_gpu_memory_gb: 9.0

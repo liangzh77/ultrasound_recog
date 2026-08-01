@@ -32,6 +32,9 @@ ultrasound_recog/
   `workspace/experiments/archive/exp_2026-04_fullimage_legacy_baseline`
 - 当前 ROI 多边形自动标注实验：
   `workspace/experiments/active/exp_2026-04_roi_poly_seg`
+- 当前患者级多模态诊断研究：
+  `workspace/experiments/active/exp_2026-07_patient_multimodal_v1`
+  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、ROI/bag 数据接口和患者级 OOF 评价框架，下一步运行 E0/E1 资源试验。
 
 每个实验目录独立保存：
 
@@ -71,6 +74,14 @@ tools/15_visualize_roi_poly_seg.py
 tools/16_demo_roi_poly_seg.py
 tools/16_demo_roi_poly_seg_tk.py
 tools/17_evaluate_roi_poly_seg.py
+tools/19_check_research_environment.py
+tools/20_fingerprint_research_sources.py
+tools/21_normalize_research_annotations.py
+tools/22_build_research_manifest.py
+tools/23_build_patient_folds.py
+tools/24_visualize_research_inputs.py
+tools/25_evaluate_patient_oof.py
+tools/26_train_patient_image_mean.py
 ```
 
 ## 数据与输出
