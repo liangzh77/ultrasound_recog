@@ -1,10 +1,10 @@
 """标签清洗脚本。
 
 遍历 workspace/data/raw/膝关节已标注/ 下所有 JSON 标注文件：
-1. 应用 label_mapping.py 中的修复规则
+1. 应用 label_mapping.py 中的修复规则，并移除区域标签中的疾病前缀
 2. 输出清洗后的数据到 workspace/data/shared_derived/cleaned/（保持原目录结构）
 3. 图片通过软链接/复制关联
-4. 生成清洗报告 workspace/data/shared_derived/clean_report.json
+4. 生成包含全部原始类别映射的报告 workspace/data/shared_derived/clean_report.json
 
 用法:
     python tools/01_clean_labels.py [--dry-run]
@@ -23,11 +23,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.label_mapping import (
-    LABEL_FIX_MAP,
-    ORPHAN_LABELS,
     SUSPICIOUS_LABELS,
     fix_label,
-    get_disease_from_label,
 )
 from src.common_paths import (
     CATEGORY_MAPPING_FILE,
@@ -78,20 +75,22 @@ def find_all_samples(raw_dir: Path):
 
 
 def clean_annotations(json_path: Path, disease: str):
-    """清洗单个 JSON 文件的标注，返回 (cleaned_data, changes)。"""
+    """清洗单个 JSON 文件，返回数据、修改记录和全部类别映射计数。"""
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
     changes = []
+    category_pairs = Counter()
     for obj in data.get("objects", []):
         old_cat = obj.get("category", "")
         new_cat = fix_label(old_cat, disease)
+        category_pairs[(old_cat, new_cat)] += 1
 
         if new_cat != old_cat:
             changes.append({"old": old_cat, "new": new_cat})
             obj["category"] = new_cat
 
-    return data, changes
+    return data, changes, category_pairs
 
 
 def main():
@@ -107,31 +106,49 @@ def main():
 
     # 清洗
     report = {
+        "dry_run": args.dry_run,
+        "cleaned_output_updated": not args.dry_run,
         "total_samples": len(samples),
         "orphan_jsons": orphan_jsons,
         "missing_json_images": missing_jsons,
+        "normalization_policy": (
+            "疾病目录表示主要诊断；像素区域标签仅表示疾病无关的解剖结构或病变"
+        ),
         "label_changes": [],
         "suspicious_labels_found": [],
+        "raw_category_stats": {},
         "category_stats": {},
+        "category_mapping": [],
+        "all_annotation_raw_category_stats": {},
+        "all_annotation_category_stats": {},
+        "all_annotation_category_mapping": [],
     }
 
+    raw_categories = Counter()
     all_categories = Counter()
+    category_mapping_counts = Counter()
     disease_patient_map = defaultdict(set)
     changed_files = 0
 
     for disease, patient, stem, json_path, img_path in samples:
         disease_patient_map[disease].add(patient)
-        cleaned_data, changes = clean_annotations(json_path, disease)
+        cleaned_data, changes, category_pairs = clean_annotations(json_path, disease)
+
+        for (old_cat, new_cat), count in category_pairs.items():
+            raw_categories[old_cat] += count
+            category_mapping_counts[(old_cat, new_cat)] += count
+            if old_cat in SUSPICIOUS_LABELS:
+                report["suspicious_labels_found"].append({
+                    "file": str(json_path),
+                    "label": old_cat,
+                    "normalized": new_cat,
+                    "count": count,
+                })
 
         # 统计类别
         for obj in cleaned_data.get("objects", []):
             cat = obj.get("category", "")
             all_categories[cat] += 1
-            if cat in SUSPICIOUS_LABELS:
-                report["suspicious_labels_found"].append({
-                    "file": str(json_path),
-                    "label": cat,
-                })
 
         if changes:
             changed_files += 1
@@ -154,11 +171,55 @@ def main():
             if not out_img.exists():
                 shutil.copy2(img_path, out_img)
 
-    # 类别统计
+    # 类别统计与完整的原始 → 规范化映射
+    report["raw_category_stats"] = {
+        "total_unique": len(raw_categories),
+        "categories": dict(raw_categories.most_common()),
+    }
     report["category_stats"] = {
         "total_unique": len(all_categories),
         "categories": dict(all_categories.most_common()),
     }
+    report["category_mapping"] = [
+        {
+            "raw": old_cat,
+            "normalized": new_cat,
+            "objects": count,
+        }
+        for (old_cat, new_cat), count in sorted(category_mapping_counts.items())
+    ]
+
+    # 孤立 JSON 不进入训练数据，但仍纳入“所有标注类别”审计。
+    all_annotation_raw_categories = raw_categories.copy()
+    all_annotation_categories = all_categories.copy()
+    all_annotation_mapping_counts = category_mapping_counts.copy()
+    for orphan_json in orphan_jsons:
+        orphan_path = Path(orphan_json)
+        disease = orphan_path.relative_to(RAW_DIR).parts[0]
+        _, _, category_pairs = clean_annotations(orphan_path, disease)
+        for (old_cat, new_cat), count in category_pairs.items():
+            all_annotation_raw_categories[old_cat] += count
+            all_annotation_categories[new_cat] += count
+            all_annotation_mapping_counts[(old_cat, new_cat)] += count
+
+    report["all_annotation_raw_category_stats"] = {
+        "total_unique": len(all_annotation_raw_categories),
+        "categories": dict(all_annotation_raw_categories.most_common()),
+    }
+    report["all_annotation_category_stats"] = {
+        "total_unique": len(all_annotation_categories),
+        "categories": dict(all_annotation_categories.most_common()),
+    }
+    report["all_annotation_category_mapping"] = [
+        {
+            "raw": old_cat,
+            "normalized": new_cat,
+            "objects": count,
+        }
+        for (old_cat, new_cat), count in sorted(
+            all_annotation_mapping_counts.items()
+        )
+    ]
     report["changed_files"] = changed_files
 
     # 疾病-患者统计
@@ -174,7 +235,15 @@ def main():
 
     print(f"\n清洗完成:")
     print(f"  修改文件数: {changed_files}")
-    print(f"  唯一类别数: {len(all_categories)}")
+    print(
+        "  全部 JSON 原始/规范化类别数: "
+        f"{len(all_annotation_raw_categories)} / "
+        f"{len(all_annotation_categories)}"
+    )
+    print(
+        "  有效配对原始/规范化类别数: "
+        f"{len(raw_categories)} / {len(all_categories)}"
+    )
     print(f"  疑似错误标签: {len(report['suspicious_labels_found'])}")
     print(f"  报告已保存: {report_path}")
 

@@ -397,7 +397,12 @@ def clip_polygon_to_rect(pts: list, x1: float, y1: float, x2: float, y2: float) 
     return output
 
 
-def save_crop(image_path: Path, crop_rect: QRectF, candidates: dict[str, list[int]] | None = None) -> dict:
+def save_crop(
+    image_path: Path,
+    crop_rect: QRectF,
+    candidates: dict[str, list[int]] | None = None,
+    reviewed: bool = True,
+) -> dict:
     """
     仅更新标注 JSON，记录超声图像矩形区域，不修改原图和分割点。
     返回 undo/redo 缓存字典：
@@ -426,6 +431,7 @@ def save_crop(image_path: Path, crop_rect: QRectF, candidates: dict[str, list[in
             "width": x2 - x1,
             "height": y2 - y1,
         }
+        new_data["ultrasound_rect_reviewed"] = reviewed
         if candidates is not None:
             new_data["ultrasound_candidates"] = {
                 edge: [int(v) for v in candidates.get(edge, [])]
@@ -442,6 +448,31 @@ def save_crop(image_path: Path, crop_rect: QRectF, candidates: dict[str, list[in
         "new_img":   None,
         "new_json":  new_json_str,
     }
+
+
+def set_ultrasound_rect_reviewed(image_path: Path, reviewed: bool = True) -> bool:
+    """更新 ultrasound_rect_reviewed 标志位。
+
+    仅当 JSON 存在且已经包含 ultrasound_rect 时更新。
+    返回是否实际写入。
+    """
+    json_path = image_path.with_suffix(".json")
+    if not json_path.exists():
+        return False
+
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    if "ultrasound_rect" not in data:
+        return False
+    if data.get("ultrasound_rect_reviewed") is reviewed:
+        return False
+
+    data["ultrasound_rect_reviewed"] = reviewed
+    json_path.write_text(json.dumps(data, ensure_ascii=False, indent=4), encoding="utf-8")
+    return True
 
 
 # ── 裁剪覆盖层（控制点 + 选框） ───────────────────────────────────────────────
@@ -980,39 +1011,83 @@ class ImageViewer(QGraphicsView):
         if edge is None:
             return False
 
-        def choose(candidates: list[int], current: float, toward_larger: bool) -> int | None:
-            if not candidates:
+        def choose(
+            candidates: list[int],
+            click_coordinate: float,
+            current: float,
+            *,
+            minimum: float | None = None,
+            maximum: float | None = None,
+        ) -> int | None:
+            valid = [
+                candidate
+                for candidate in candidates
+                if (minimum is None or candidate >= minimum)
+                and (maximum is None or candidate <= maximum)
+            ]
+            if not valid:
                 return None
-            if toward_larger:
-                larger = [c for c in candidates if c > current + 1]
-                return min(larger) if larger else None
-            smaller = [c for c in candidates if c < current - 1]
-            return max(smaller) if smaller else None
+            return min(
+                valid,
+                key=lambda candidate: (
+                    abs(candidate - click_coordinate),
+                    abs(candidate - current),
+                    candidate,
+                ),
+            )
 
         if edge == "left":
-            new_left = choose(self._edge_candidates.get("left", []), left, toward_larger=scene_pos.x() > left)
+            new_left = choose(
+                self._edge_candidates.get("left", []),
+                scene_pos.x(),
+                left,
+                maximum=right - 4,
+            )
             if new_left is not None:
+                if abs(new_left - left) <= 1:
+                    return True
                 self._crop_overlay.set_edge("left", float(new_left))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
                 self.crop_commit_requested.emit()
                 return True
         elif edge == "right":
-            new_right = choose(self._edge_candidates.get("right", []), right, toward_larger=scene_pos.x() > right)
+            new_right = choose(
+                self._edge_candidates.get("right", []),
+                scene_pos.x(),
+                right,
+                minimum=left + 4,
+            )
             if new_right is not None:
+                if abs(new_right - right) <= 1:
+                    return True
                 self._crop_overlay.set_edge("right", float(new_right))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
                 self.crop_commit_requested.emit()
                 return True
         elif edge == "top":
-            new_top = choose(self._edge_candidates.get("top", []), top, toward_larger=scene_pos.y() > top)
+            new_top = choose(
+                self._edge_candidates.get("top", []),
+                scene_pos.y(),
+                top,
+                maximum=bottom - 4,
+            )
             if new_top is not None:
+                if abs(new_top - top) <= 1:
+                    return True
                 self._crop_overlay.set_edge("top", float(new_top))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
                 self.crop_commit_requested.emit()
                 return True
         elif edge == "bottom":
-            new_bottom = choose(self._edge_candidates.get("bottom", []), bottom, toward_larger=scene_pos.y() > bottom)
+            new_bottom = choose(
+                self._edge_candidates.get("bottom", []),
+                scene_pos.y(),
+                bottom,
+                minimum=top + 4,
+            )
             if new_bottom is not None:
+                if abs(new_bottom - bottom) <= 1:
+                    return True
                 self._crop_overlay.set_edge("bottom", float(new_bottom))
                 self.crop_rect_changed.emit(self._crop_overlay.get_rect())
                 self.crop_commit_requested.emit()
@@ -1138,8 +1213,18 @@ class ImageViewer(QGraphicsView):
 # ── 文件树 ────────────────────────────────────────────────────────────────────
 
 class FileTree(QTreeWidget):
+    FILTER_ALL = "all"
+    FILTER_UNCROPPED = "uncropped"
+    FILTER_UNREVIEWED = "unreviewed"
+    COLOR_REVIEWED = "#2e7d32"
+    COLOR_UNREVIEWED = "#b45309"
+    COLOR_UNCROPPED = "#5f6368"
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._data_root: Path | None = None
+        self._filter_mode = self.FILTER_ALL
+        self._unreviewed_snapshot: set[Path] = set()
         self.setHeaderHidden(True)
         self.setIndentation(16)
         self.setAnimated(True)
@@ -1152,7 +1237,9 @@ class FileTree(QTreeWidget):
 
     def populate(self, data_root: Path):
         self.clear()
-        self._filter_uncropped = False
+        self._data_root = data_root
+        self._filter_mode = self.FILTER_ALL
+        self._unreviewed_snapshot.clear()
         if not data_root.exists():
             return
         for disease_dir in sorted(data_root.iterdir()):
@@ -1166,20 +1253,96 @@ class FileTree(QTreeWidget):
         self.itemExpanded.connect(self._on_expand)
 
     @staticmethod
-    def _is_cropped(img_path: Path) -> bool:
+    def _crop_state(img_path: Path) -> tuple[bool, bool]:
         json_path = img_path.with_suffix(".json")
         if not json_path.exists():
-            return False
+            return False, False
         try:
             with open(json_path, encoding="utf-8") as f:
                 d = json.load(f)
-            return "ultrasound_rect" in d
+            has_rect = "ultrasound_rect" in d
+            reviewed = has_rect and d.get("ultrasound_rect_reviewed") is True
+            return has_rect, reviewed
         except Exception:
-            return False
+            return False, False
 
-    def set_filter_uncropped(self, enabled: bool):
-        """开启/关闭「仅显示未裁剪」过滤器，对已展开的节点立即生效。"""
-        self._filter_uncropped = enabled
+    @classmethod
+    def _has_crop_rect(cls, img_path: Path) -> bool:
+        return cls._crop_state(img_path)[0]
+
+    @classmethod
+    def _is_crop_reviewed(cls, img_path: Path) -> bool:
+        return cls._crop_state(img_path)[1]
+
+    def matches_filter(self, img_path: Path) -> bool:
+        has_rect, reviewed = self._crop_state(img_path)
+        if self._filter_mode == self.FILTER_UNCROPPED:
+            return not has_rect
+        if self._filter_mode == self.FILTER_UNREVIEWED:
+            return img_path in self._unreviewed_snapshot
+        return True
+
+    def capture_unreviewed_snapshot(self) -> int:
+        """记录当前所有已有裁剪框但尚未人工确认的图片。"""
+        snapshot: set[Path] = set()
+        if self._data_root is not None and self._data_root.exists():
+            for disease_dir in sorted(self._data_root.iterdir()):
+                if not disease_dir.is_dir():
+                    continue
+                for patient_dir in sorted(disease_dir.iterdir()):
+                    if not patient_dir.is_dir():
+                        continue
+                    for img_path in sorted(patient_dir.iterdir()):
+                        if (
+                            img_path.is_file()
+                            and img_path.suffix in IMAGE_EXTS
+                            and img_path.with_suffix(".json").exists()
+                        ):
+                            has_rect, reviewed = self._crop_state(img_path)
+                            if has_rect and not reviewed:
+                                snapshot.add(img_path)
+        self._unreviewed_snapshot = snapshot
+        return len(snapshot)
+
+    def is_unreviewed_snapshot_active(self) -> bool:
+        return self._filter_mode == self.FILTER_UNREVIEWED
+
+    def is_in_unreviewed_snapshot(self, img_path: Path) -> bool:
+        return img_path in self._unreviewed_snapshot
+
+    @classmethod
+    def refresh_review_style(cls, img_item: QTreeWidgetItem):
+        """根据 JSON 状态刷新图片节点颜色和文字提示。"""
+        img_path = img_item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(img_path, Path):
+            return
+        has_rect, reviewed = cls._crop_state(img_path)
+        if reviewed:
+            color = cls.COLOR_REVIEWED
+            state_text = "已确认"
+        elif has_rect:
+            color = cls.COLOR_UNREVIEWED
+            state_text = "未确认"
+        else:
+            color = cls.COLOR_UNCROPPED
+            state_text = "未裁剪"
+        img_item.setForeground(0, QBrush(QColor(color)))
+        img_item.setToolTip(0, state_text)
+
+    def set_filter_mode(self, mode: str, *, refresh_snapshot: bool = False) -> int:
+        """切换文件过滤模式，并立即刷新已经展开的节点。"""
+        if mode not in {
+            self.FILTER_ALL,
+            self.FILTER_UNCROPPED,
+            self.FILTER_UNREVIEWED,
+        }:
+            raise ValueError(f"未知文件过滤模式: {mode}")
+        previous_mode = self._filter_mode
+        if mode == self.FILTER_UNREVIEWED and (
+            refresh_snapshot or previous_mode != self.FILTER_UNREVIEWED
+        ):
+            self.capture_unreviewed_snapshot()
+        self._filter_mode = mode
         root = self.invisibleRootItem()
         for di in range(root.childCount()):
             disease_item = root.child(di)
@@ -1190,13 +1353,17 @@ class FileTree(QTreeWidget):
                     img_item = patient_item.child(ii)
                     img_path = img_item.data(0, Qt.ItemDataRole.UserRole)
                     if isinstance(img_path, Path):
-                        hide = enabled and self._is_cropped(img_path)
+                        self.refresh_review_style(img_item)
+                        hide = not self.matches_filter(img_path)
                         img_item.setHidden(hide)
                         if not hide:
                             has_visible = True
                 # 患者文件夹：若无可见图片则隐藏
                 if patient_item.childCount() > 0:
-                    patient_item.setHidden(enabled and not has_visible)
+                    patient_item.setHidden(
+                        mode != self.FILTER_ALL and not has_visible
+                    )
+        return len(self._unreviewed_snapshot)
 
     def _on_expand(self, item: QTreeWidgetItem):
         if item.childCount() == 1:
@@ -1219,12 +1386,21 @@ class FileTree(QTreeWidget):
                                   if f.suffix in IMAGE_EXTS and f.with_suffix(".json").exists()):
                     img_item = QTreeWidgetItem(p_item, [img.name])
                     img_item.setData(0, Qt.ItemDataRole.UserRole, img)
-                    if self._filter_uncropped and self._is_cropped(img):
+                    self.refresh_review_style(img_item)
+                    if not self.matches_filter(img):
                         img_item.setHidden(True)
                     else:
                         has_visible = True
-                if self._filter_uncropped and not has_visible:
+                if self._filter_mode != self.FILTER_ALL and not has_visible:
                     p_item.setHidden(True)
+
+    def ensure_loaded(self, disease_item: QTreeWidgetItem):
+        """确保疾病节点已经生成患者和图片子节点。"""
+        if disease_item.childCount() == 1:
+            child = disease_item.child(0)
+            if child.data(0, Qt.ItemDataRole.UserRole) == "__placeholder__":
+                self._on_expand(disease_item)
+        disease_item.setExpanded(True)
 
 
 # ── 右侧信息面板 ──────────────────────────────────────────────────────────────
@@ -1416,9 +1592,16 @@ class MainWindow(QMainWindow):
 
         sep3 = QWidget(); sep3.setFixedWidth(10); toolbar.addWidget(sep3)
 
-        self._btn_filter = tbtn("仅未裁剪", 80)
+        self._btn_filter = tbtn("未裁剪", 72)
         self._btn_filter.setCheckable(True)
         self._btn_filter.setChecked(False)
+        self._btn_filter.setToolTip("只显示尚未生成裁剪框的图片")
+        self._btn_unreviewed = tbtn("未确认", 72)
+        self._btn_unreviewed.setCheckable(True)
+        self._btn_unreviewed.setChecked(False)
+        self._btn_unreviewed.setToolTip(
+            "启用时生成未确认快照；查看后条目保留，关闭后再次启用可刷新快照"
+        )
 
         self._undo_cache: dict | None = None   # 上一次裁剪的缓存
         self._redo_cache: dict | None = None   # 撤回后可恢复的缓存
@@ -1432,7 +1615,8 @@ class MainWindow(QMainWindow):
         self._btn_cancel.clicked.connect(self._cancel_crop)
         self._btn_undo.clicked.connect(self._do_undo)
         self._btn_redo.clicked.connect(self._do_redo)
-        self._btn_filter.clicked.connect(self._toggle_filter)
+        self._btn_filter.clicked.connect(self._toggle_uncropped_filter)
+        self._btn_unreviewed.clicked.connect(self._toggle_unreviewed_filter)
 
         # 回车快捷键：窗口级别，焦点在任何子控件时均生效
         enter_sc = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
@@ -1486,6 +1670,15 @@ class MainWindow(QMainWindow):
         pixmap     = QPixmap(str(img_path))
         size       = (pixmap.width(), pixmap.height()) if not pixmap.isNull() else None
         labels     = self._viewer.load_image(img_path, self.color_map)
+        marked_reviewed = False
+        if (
+            not pixmap.isNull()
+            and self._tree.is_unreviewed_snapshot_active()
+            and self._tree.is_in_unreviewed_snapshot(img_path)
+            and not self._tree._is_crop_reviewed(img_path)
+        ):
+            marked_reviewed = set_ultrasound_rect_reviewed(img_path, reviewed=True)
+        self._tree.refresh_review_style(item)
         self._panel.update_info(img_path.name, size, patient, disease, labels, self.color_map)
         saved_rect = self._viewer.get_saved_crop_rect()
         if saved_rect is not None and saved_rect.isValid():
@@ -1496,7 +1689,8 @@ class MainWindow(QMainWindow):
             self._viewer.set_edge_candidates(self._viewer.get_edge_candidates())
             self._panel.update_crop_info(saved_rect)
             self._status.showMessage(
-                f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域  |   已加载超声区域，可直接调整"
+                f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域  |   "
+                f"{'已查看并确认，可直接调整' if marked_reviewed else '已加载超声区域，可直接调整'}"
             )
         else:
             self._status.showMessage(f"{disease} / {patient} / {img_path.name}   |   {len(labels)} 个标注区域")
@@ -1552,7 +1746,7 @@ class MainWindow(QMainWindow):
             self._panel.update_crop_info(crop_rect)
             self._status.showMessage(
                 f"自动框选完成  X:{int(crop_rect.x())} Y:{int(crop_rect.y())}  "
-                f"W:{int(crop_rect.width())} H:{int(crop_rect.height())}  阈值:{self._spin_auto_jump.value():.0f}%   |   可点击边界两侧切换候选边界，或拖动微调后确认"
+                f"W:{int(crop_rect.width())} H:{int(crop_rect.height())}  阈值:{self._spin_auto_jump.value():.0f}%   |   点击目标位置可跳到最近候选边界，或拖动微调后确认"
             )
         except Exception as e:
             QMessageBox.warning(self, "自动框选失败", str(e))
@@ -1598,13 +1792,13 @@ class MainWindow(QMainWindow):
                 cancelled = True
                 break
 
-            if self._tree._is_cropped(img_path):
+            if self._tree._has_crop_rect(img_path):
                 skipped += 1
                 progress.setValue(idx)
                 continue
             try:
                 geometry = detect_ultrasound_geometry(img_path, jump_ratio=jump_ratio)
-                save_crop(img_path, geometry["rect"], geometry.get("candidates"))
+                save_crop(img_path, geometry["rect"], geometry.get("candidates"), reviewed=False)
                 processed += 1
             except Exception as e:
                 failed.append(f"{img_path.name}: {e}")
@@ -1630,8 +1824,7 @@ class MainWindow(QMainWindow):
         current_path = self._viewer.get_image_path()
         if current_path is not None:
             self._reload_image(current_path)
-        if self._btn_filter.isChecked():
-            self._tree.set_filter_uncropped(True)
+        self._apply_tree_filter()
 
         if failed:
             preview = "\n".join(failed[:12])
@@ -1674,6 +1867,12 @@ class MainWindow(QMainWindow):
         if img_path is None:
             return False
         current_item = self._tree.currentItem()
+        next_filtered_item = None
+        if (
+            current_item is not None
+            and self._active_filter_mode() != FileTree.FILTER_ALL
+        ):
+            next_filtered_item = self._find_next_filtered_item(current_item)
 
         # 限制裁剪框在图片范围内
         w, h = self._viewer._img_size
@@ -1683,12 +1882,14 @@ class MainWindow(QMainWindow):
             return False
 
         try:
-            cache = save_crop(img_path, crop_rect, self._viewer.get_edge_candidates())
+            cache = save_crop(img_path, crop_rect, self._viewer.get_edge_candidates(), reviewed=True)
             self._undo_cache = cache
             self._redo_cache = None
             self._btn_undo.setEnabled(True)
             self._btn_redo.setEnabled(False)
             self._viewer.set_saved_crop_rect(crop_rect)
+            if current_item is not None:
+                self._tree.refresh_review_style(current_item)
 
             ann_count = len(json.loads(cache["new_json"]).get("objects", [])) if cache["new_json"] else 0
             self._cancel_crop()
@@ -1697,10 +1898,11 @@ class MainWindow(QMainWindow):
                 f"已记录超声区域  {int(crop_rect.width())} × {int(crop_rect.height())}  "
                 f"图中标注 {ann_count} 个  |  {img_path.name}   [↩ 可撤回]"
             )
-            # 过滤器开启时，裁剪完自动隐藏当前图片并跳到下一张
-            if self._btn_filter.isChecked() and current_item:
+            # “未裁剪”是动态过滤，完成后隐藏当前项；“未确认”是固定快照，
+            # 确认后保留当前项，便于快速回看。
+            if self._active_filter_mode() != FileTree.FILTER_ALL and current_item:
                 cur = self._tree.currentItem()
-                if cur:
+                if cur and self._active_filter_mode() != FileTree.FILTER_UNREVIEWED:
                     cur.setHidden(True)
                     parent = cur.parent()
                     if parent:
@@ -1710,15 +1912,11 @@ class MainWindow(QMainWindow):
                         )
                         if not has_visible:
                             parent.setHidden(True)
-                if not open_next_uncropped:
-                    self._tree_navigate(1)
-            if open_next_uncropped and current_item:
-                next_item = self._find_next_uncropped_item(current_item)
-                if next_item:
-                    self._tree.setCurrentItem(next_item)
-                    self._tree.scrollToItem(next_item)
+                if next_filtered_item:
+                    self._tree.setCurrentItem(next_filtered_item)
+                    self._tree.scrollToItem(next_filtered_item)
                 else:
-                    self._status.showMessage("裁剪完成，后面没有未裁剪图片了")
+                    self._status.showMessage("处理完成，后面没有符合当前过滤条件的图片了")
             return True
         except Exception as e:
             QMessageBox.critical(self, "保存失败", str(e))
@@ -1734,7 +1932,7 @@ class MainWindow(QMainWindow):
         if img_path is None:
             return
         try:
-            save_crop(img_path, crop_rect, self._viewer.get_edge_candidates())
+            save_crop(img_path, crop_rect, self._viewer.get_edge_candidates(), reviewed=True)
             self._viewer.set_saved_crop_rect(crop_rect)
             self._status.showMessage(
                 f"已自动保存超声区域  X:{int(crop_rect.x())} Y:{int(crop_rect.y())}  "
@@ -1747,7 +1945,7 @@ class MainWindow(QMainWindow):
         if not self._do_save_crop(open_next_uncropped=True):
             return
         next_path = self._viewer.get_image_path()
-        if next_path is not None and not self._tree._is_cropped(next_path):
+        if next_path is not None and not self._tree._has_crop_rect(next_path):
             self._on_auto_crop_btn()
 
     def _reload_image(self, img_path: Path):
@@ -1826,15 +2024,44 @@ class MainWindow(QMainWindow):
         self._tree.scrollToItem(nxt)
         self._nav_direction = 0
 
-    def _find_next_uncropped_item(self, start_item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
-        item = start_item
-        while True:
-            item = self._next_tree_item(item)
-            if item is None:
-                return None
-            img_path = item.data(0, Qt.ItemDataRole.UserRole)
-            if isinstance(img_path, Path) and not self._tree._is_cropped(img_path):
-                return item
+    def _find_next_filtered_item(self, start_item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
+        """按疾病、患者、图片顺序查找下一张符合当前过滤条件的图片。"""
+        start_patient = start_item.parent()
+        start_disease = start_patient.parent() if start_patient is not None else None
+        if start_patient is None or start_disease is None:
+            return None
+
+        root = self._tree.invisibleRootItem()
+        start_disease_index = root.indexOfChild(start_disease)
+        start_patient_index = start_disease.indexOfChild(start_patient)
+        start_image_index = start_patient.indexOfChild(start_item)
+        if min(start_disease_index, start_patient_index, start_image_index) < 0:
+            return None
+
+        for disease_index in range(start_disease_index, root.childCount()):
+            disease_item = root.child(disease_index)
+            self._tree.ensure_loaded(disease_item)
+            patient_start = start_patient_index if disease_index == start_disease_index else 0
+
+            for patient_index in range(patient_start, disease_item.childCount()):
+                patient_item = disease_item.child(patient_index)
+                image_start = (
+                    start_image_index + 1
+                    if (
+                        disease_index == start_disease_index
+                        and patient_index == start_patient_index
+                    )
+                    else 0
+                )
+                for image_index in range(image_start, patient_item.childCount()):
+                    image_item = patient_item.child(image_index)
+                    image_path = image_item.data(0, Qt.ItemDataRole.UserRole)
+                    if (
+                        isinstance(image_path, Path)
+                        and self._tree.matches_filter(image_path)
+                    ):
+                        return image_item
+        return None
 
     def _next_tree_item(self, item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
         if item is None:
@@ -1865,6 +2092,8 @@ class MainWindow(QMainWindow):
     def _first_real_child(item: QTreeWidgetItem) -> "QTreeWidgetItem | None":
         for i in range(item.childCount()):
             child = item.child(i)
+            if child.isHidden():
+                continue
             role = child.data(0, Qt.ItemDataRole.UserRole)
             if role == "__placeholder__":
                 continue
@@ -1879,6 +2108,8 @@ class MainWindow(QMainWindow):
         index = parent.indexOfChild(item)
         for i in range(index + 1, parent.childCount()):
             sibling = parent.child(i)
+            if sibling.isHidden():
+                continue
             role = sibling.data(0, Qt.ItemDataRole.UserRole)
             if role == "__placeholder__":
                 continue
@@ -1901,6 +2132,8 @@ class MainWindow(QMainWindow):
         """递归找 item 下第一个图片节点（UserRole 是 Path 的节点）。"""
         for i in range(item.childCount()):
             child = item.child(i)
+            if child.isHidden():
+                continue
             if isinstance(child.data(0, Qt.ItemDataRole.UserRole), Path):
                 return child
             # 子项也是文件夹，继续向下找
@@ -1914,6 +2147,8 @@ class MainWindow(QMainWindow):
         """递归找 item 下最后一个图片节点。"""
         for i in range(item.childCount() - 1, -1, -1):
             child = item.child(i)
+            if child.isHidden():
+                continue
             if isinstance(child.data(0, Qt.ItemDataRole.UserRole), Path):
                 return child
             child.setExpanded(True)
@@ -1934,10 +2169,34 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
-    def _toggle_filter(self):
-        enabled = self._btn_filter.isChecked()
-        self._tree.set_filter_uncropped(enabled)
+    def _active_filter_mode(self) -> str:
+        if self._btn_unreviewed.isChecked():
+            return FileTree.FILTER_UNREVIEWED
+        if self._btn_filter.isChecked():
+            return FileTree.FILTER_UNCROPPED
+        return FileTree.FILTER_ALL
+
+    def _apply_tree_filter(self, *, refresh_unreviewed_snapshot: bool = False):
+        mode = self._active_filter_mode()
+        snapshot_count = self._tree.set_filter_mode(
+            mode,
+            refresh_snapshot=refresh_unreviewed_snapshot,
+        )
+        if mode == FileTree.FILTER_UNREVIEWED and refresh_unreviewed_snapshot:
+            self._status.showMessage(
+                f"未确认快照：{snapshot_count} 张；查看即确认，条目仍保留（橙色未确认，绿色已确认）"
+            )
         self._refresh_styles()
+
+    def _toggle_uncropped_filter(self, checked: bool):
+        if checked:
+            self._btn_unreviewed.setChecked(False)
+        self._apply_tree_filter()
+
+    def _toggle_unreviewed_filter(self, checked: bool):
+        if checked:
+            self._btn_filter.setChecked(False)
+        self._apply_tree_filter(refresh_unreviewed_snapshot=checked)
 
     def _refresh_styles(self):
         self._btn_ann.setStyleSheet(BTN_ACTIVE if self._btn_ann.isChecked() else BTN_NORMAL)
@@ -1947,6 +2206,9 @@ class MainWindow(QMainWindow):
         self._btn_undo.setStyleSheet(BTN_NORMAL)
         self._btn_redo.setStyleSheet(BTN_NORMAL)
         self._btn_filter.setStyleSheet(BTN_ACTIVE if self._btn_filter.isChecked() else BTN_NORMAL)
+        self._btn_unreviewed.setStyleSheet(
+            BTN_ACTIVE if self._btn_unreviewed.isChecked() else BTN_NORMAL
+        )
 
 
 # ── 入口 ──────────────────────────────────────────────────────────────────────

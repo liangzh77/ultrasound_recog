@@ -2,9 +2,9 @@
 
 定义了：
 1. LABEL_FIX_MAP: 错误标签 → 正确标签的直接映射
-2. DISEASE_PREFIX_MAP: 疾病目录名 → 标签前缀
-3. CATEGORY_ID_MAP: 清洗后的所有类别 → 整数 ID
-4. DISEASE_CLASSES: 7 种疾病分类
+2. LABEL_PREFIX_TO_DISEASE: 识别历史标签中的疾病前缀
+3. fix_label: 将像素区域标签规范化为疾病无关名称
+4. DISEASE_CLASSES: 历史 7 种疾病分类
 """
 
 # ============================================================
@@ -14,33 +14,29 @@ LABEL_FIX_MAP = {
     # 错别字：内测 → 内侧
     "N内测副韧带": "N内侧副韧带",
     "N-内测半月板": "N内侧半月板",
-    "内测半月板": "N内侧半月板",       # 同时补前缀
+    "内测半月板": "内侧半月板",
     # 拼写错误
     "SPA-股二头肌建": "SPA-股二头肌腱",  # 建 → 腱
+    "GA股二头肌建": "GA股二头肌腱",      # 建 → 腱
+    "SPA-斌下肾囊炎": "SPA-髌下深囊炎",  # 客户增量数据重新带入的旧错别字
     # 占位符/无效标签
     "滑膜那种": "滑膜囊肿",             # 需人工确认，暂映射为滑膜囊肿
-    # 注意：以下需要根据疾病目录动态补前缀，在 ORPHAN_LABELS 中处理
 }
 
-# 需要根据所在疾病目录动态补前缀的标签
-ORPHAN_LABELS = {
-    "腘窝囊肿",         # 缺少疾病前缀
-    "内测半月板",        # 已在 LABEL_FIX_MAP 中处理
-    "滑膜囊肿",         # 修复后仍可能缺前缀
-    "半膜肌腱",
-    "滑膜那种",
+# 去除疾病前缀后仍需合并的同义写法。
+REGION_NAME_FIX_MAP = {
+    "髌骨前浅筋膜": "髌前浅筋膜",
 }
 
 # 疑似错误但无法确认的标签（保留并在报告中标记）
 SUSPICIOUS_LABELS = {
-    "SPA-髌下深囊炎",   # 疑似 OCR/拼写错误
-    "SPA-鹅足腱滑囊炎", # 命名风格不一致（其他疾病不加"炎"）
     "滑膜那种",         # 原始值为占位符
 }
 
 # ============================================================
-# 2. 疾病目录名 → 标签前缀映射
+# 2. 疾病目录名 → 历史标签前缀映射
 # ============================================================
+# 仅用于识别旧数据来源。新的像素区域训练标签不再添加疾病前缀。
 DISEASE_PREFIX_MAP = {
     "正常": "N",
     "类风湿性关节炎": "RA",
@@ -98,26 +94,23 @@ def get_anatomy_from_label(label: str) -> str:
 
 
 def fix_label(label: str, disease_dir: str = "") -> str:
-    """修复单个标签。
+    """将单个像素区域标签规范化为疾病无关名称。
 
     Args:
         label: 原始标签
-        disease_dir: 所在的疾病目录名（用于补前缀）
+        disease_dir: 保留的兼容参数；主要诊断由目录表达，不写入区域标签
 
     Returns:
-        修正后的标签
+        修正错别字并去除疾病前缀后的区域名称
     """
-    # 先做直接映射修复
+    label = label.strip()
+
+    # 先修复包含疾病前缀的历史错别字，再统一去除前缀。
     if label in LABEL_FIX_MAP:
         label = LABEL_FIX_MAP[label]
 
-    # 检查是否是缺前缀的孤立标签，根据疾病目录补前缀
-    if label in ORPHAN_LABELS and disease_dir:
-        prefix = DISEASE_PREFIX_MAP.get(disease_dir, "")
-        if prefix and not label.startswith(prefix):
-            label = prefix + label
-
-    return label
+    label = get_anatomy_from_label(label).strip()
+    return REGION_NAME_FIX_MAP.get(label, label)
 
 
 # ============================================================

@@ -30,8 +30,8 @@ ultrasound_recog/
 
 - 历史全图基线：
   `workspace/experiments/archive/exp_2026-04_fullimage_legacy_baseline`
-- 当前 ROI-only 分类实验：
-  `workspace/experiments/active/exp_2026-04_roi_only_cls`
+- 当前 ROI 多边形自动标注实验：
+  `workspace/experiments/active/exp_2026-04_roi_poly_seg`
 
 每个实验目录独立保存：
 
@@ -66,6 +66,11 @@ tools/10_train_medsam.py
 tools/11_evaluate.py
 tools/12_inference.py
 tools/13_demo_app.py
+tools/14_train_roi_poly_seg.py
+tools/15_visualize_roi_poly_seg.py
+tools/16_demo_roi_poly_seg.py
+tools/16_demo_roi_poly_seg_tk.py
+tools/17_evaluate_roi_poly_seg.py
 ```
 
 ## 数据与输出
@@ -81,6 +86,36 @@ tools/13_demo_app.py
 
 - 项目级文档与日志：
   `docs/project/`
+- 标注工具定位与启动说明：
+  `docs/project/标注工具定位与启动说明.md`
+  — 说明像素级标注工具 ISAT 的实际位置和启动方法，区分 ISAT、项目 ROI 编辑器与自动标注演示，解决“标注程序在哪里、应该启动哪个程序”的问题。
+- 原始标注数据同步记录：
+  `docs/project/原始标注数据同步记录_2026-07-24.md`
+  — 记录患者目录自动匹配与重命名、新增数据和 Excel 的同步结果、完整性校验，以及重新生成清洗数据和训练集划分时的注意事项。
+- 像素区域标签规范化记录：
+  `docs/project/像素区域标签规范化记录_2026-07-24.md`
+  — 完整审计 88 个原始区域类别，将疾病前缀和已确认的错别字统一规范化为 28 个疾病无关类别，并列出全部映射、对象数和仍需临床确认的近似名称。
+- 临床 Excel 更新替换记录：
+  `docs/project/临床Excel更新替换记录_2026-07-24.md`
+  — 记录客户更新的 5 份临床工作簿与疾病目录的对应关系、新旧内容差异、旧版备份位置和替换后的完整性校验；其中 RA 修正 2 个 RF 值，损伤表修正化验列错位。
+- Excel 训练特征与标签泄漏审计：
+  `docs/project/Excel训练特征与标签泄漏审计_2026-07-24.md`
+  — 审计诊断、类别编码、病程、日期和化验缺失模式造成的标签泄漏，给出临床特征白名单、分层融合策略，并指出当前 28 类区域规范化尚未真正更新训练缓存。
+- 新一轮患者级多模态诊断研究方案：
+  `docs/project/新一轮患者级多模态诊断研究方案_2026-07-24.md`
+  — 基于新增数据和客户补充要求，确定患者级六类主要诊断、ROI 动态输入、Attention MIL、疾病无关病变识别、正常组无 Excel 时的分层融合、五折 OOF 验证和 2026 隐藏标签盲测方案，并给出可验收的实施任务。
+- 新一轮患者级多模态诊断研究实施计划：
+  `docs/project/新一轮患者级多模态诊断研究实施计划_v1.0_2026-07-24.md`
+  — 将研究方案落实为数据冻结、外层五折/内层早停、E0～F2 实验矩阵、默认训练参数、统计门槛、RTX 3080 与磁盘预算、可执行任务和阶段停止规则。
+- 架构决策记录：
+  `docs/decisions/ADR-001-采用患者级六类主要诊断与分层多模态融合.md`
+  — 说明为何排除滑膜囊肿主要诊断、为何不能直接做六类图像/Excel 融合，以及为何采用患者多图和软融合架构。
+- 临床特征与标注规范化决策：
+  `docs/decisions/ADR-002-固定临床特征白名单与标注规范化前置条件.md`
+  — 固定后续训练的临床字段白名单和正常组分层融合约束，把重新生成 28 类疾病无关标注设为训练前置条件，并记录随机化验项遮蔽作为推荐的稳健性实验。
+- 本机训练资源与时限决策：
+  `docs/decisions/ADR-003-限制单模型训练时间并保护本机CPU资源.md`
+  — 固定 RTX 3080 10 GB 下的主模型、CPU/内存/显存保护、单 fold 资源试运行、10 小时目标、11.5 小时软截止和 23.5 小时硬截止。
 - 实验说明：
   `workspace/experiments/README.md`
 - 实验索引：
