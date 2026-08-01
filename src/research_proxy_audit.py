@@ -85,7 +85,22 @@ def _sample_strips(strips: Iterable[np.ndarray], limit: int = 50_000) -> np.ndar
     flattened = [item.reshape(-1, 3) for item in strips if item.size]
     if not flattened:
         return np.zeros((1, 3), dtype=np.uint8)
-    pixels = np.concatenate(flattened, axis=0)
+    # Sample each view before concatenating. Some outside-ROI strips contain
+    # almost the whole frame; materializing all of them made this audit spend
+    # most of its time copying pixels that were immediately discarded.
+    per_strip_limit = max(1, limit // len(flattened))
+    sampled = []
+    for pixels in flattened:
+        if len(pixels) > per_strip_limit:
+            indices = np.linspace(
+                0,
+                len(pixels) - 1,
+                per_strip_limit,
+                dtype=np.int64,
+            )
+            pixels = pixels[indices]
+        sampled.append(pixels)
+    pixels = np.concatenate(sampled, axis=0)
     if len(pixels) > limit:
         indices = np.linspace(0, len(pixels) - 1, limit, dtype=np.int64)
         pixels = pixels[indices]
