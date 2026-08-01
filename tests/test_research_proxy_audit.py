@@ -9,6 +9,7 @@ from src.research_proxy_audit import (
     GEOMETRY_FEATURES,
     PIXEL_SAMPLE_LIMIT,
     ROI_GEOMETRY_FEATURES,
+    ROI_RESOLUTION_FEATURES,
     ProxyTable,
     _sample_strips,
     aggregate_patient_proxy_features,
@@ -37,6 +38,8 @@ def test_extract_proxy_features_uses_only_registered_nonclinical_signals(tmp_pat
     assert features["width"] == 30
     assert features["height"] == 20
     assert features["roi_area_fraction"] == 216 / 600
+    assert features["roi_width_pixels"] == 18
+    assert features["roi_height_pixels"] == 12
     assert features["is_jpeg"] == 1
     forbidden = {"diagnosis", "person", "path", "filename", "name"}
     assert not any(token in key.casefold() for key in features for token in forbidden)
@@ -138,6 +141,8 @@ def test_proxy_feature_groups_separate_shortcut_sources():
     assert set(DIMENSION_EXPORT_FEATURES).isdisjoint(ROI_GEOMETRY_FEATURES)
     assert FEATURE_GROUPS["dimensions_export"] == DIMENSION_EXPORT_FEATURES
     assert FEATURE_GROUPS["roi_geometry"] == ROI_GEOMETRY_FEATURES
+    assert FEATURE_GROUPS["roi_resolution_upper_bound"] == ROI_RESOLUTION_FEATURES
+    assert FEATURE_GROUPS["roi_aspect_visible"] == ("roi_aspect_ratio",)
 
 
 def test_proxy_permutation_test_is_reproducible():

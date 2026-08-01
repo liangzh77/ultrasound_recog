@@ -67,12 +67,29 @@ ROI_GEOMETRY_FEATURES = (
     "roi_area_fraction",
     "roi_aspect_ratio",
 )
+ROI_RESOLUTION_FEATURES = (
+    "roi_width_pixels",
+    "roi_height_pixels",
+    "log_roi_pixel_count",
+    "roi_aspect_ratio",
+)
 
 FEATURE_GROUPS = {
     "image_count_only": (),
     "dimensions_export": DIMENSION_EXPORT_FEATURES,
     "roi_geometry": ROI_GEOMETRY_FEATURES,
     "outer_pixels": FULL_BORDER_FEATURES + OUTSIDE_ROI_FEATURES,
+    "full_visible_nonmedical": (
+        "image_aspect_ratio",
+        *FULL_BORDER_FEATURES,
+        *OUTSIDE_ROI_FEATURES,
+    ),
+    "roi_aspect_visible": ("roi_aspect_ratio",),
+    "roi_resolution_upper_bound": ROI_RESOLUTION_FEATURES,
+    "roi_edge_visible_control": (
+        "roi_aspect_ratio",
+        *ROI_BORDER_FEATURES,
+    ),
     "geometry": GEOMETRY_FEATURES,
     "outer_nonmedical": GEOMETRY_FEATURES
     + FULL_BORDER_FEATURES
@@ -188,6 +205,9 @@ def extract_image_proxy_features(
         "roi_height_fraction": float(roi_height / height),
         "roi_area_fraction": float((roi_width * roi_height) / pixel_count),
         "roi_aspect_ratio": float(roi_width / roi_height),
+        "roi_width_pixels": float(roi_width),
+        "roi_height_pixels": float(roi_height),
+        "log_roi_pixel_count": float(np.log1p(roi_width * roi_height)),
         "log_bytes_per_pixel": float(
             np.log1p(image_path.stat().st_size / pixel_count)
         ),
