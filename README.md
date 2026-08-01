@@ -34,7 +34,7 @@ ultrasound_recog/
   `workspace/experiments/active/exp_2026-04_roi_poly_seg`
 - 当前患者级多模态诊断研究：
   `workspace/experiments/active/exp_2026-07_patient_multimodal_v1`
-  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、ROI/bag 数据接口和患者级 OOF 评价框架，下一步运行 E0/E1 资源试验。
+  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、ROI/bag 数据接口、患者级 OOF 评价框架和 E0/E1 fold 0 资源试验，下一步运行 E0/E1 正式五折。
 
 每个实验目录独立保存：
 

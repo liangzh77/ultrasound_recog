@@ -44,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pilot-epochs", type=int, choices=range(1, 6))
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--watchdog-child", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -168,6 +169,41 @@ def main() -> int:
     args = parse_args()
     config = load_research_config(args.config.resolve())
     pretrained_path = resolve_pretrained_weights(config, ROOT)
+    if not args.dry_run and not args.watchdog_child:
+        from src.research_watchdog import run_with_hard_timeout
+
+        command = [
+            sys.executable,
+            "-u",
+            str(Path(__file__).resolve()),
+            *sys.argv[1:],
+            "--watchdog-child",
+        ]
+        watched = run_with_hard_timeout(
+            command,
+            cwd=ROOT,
+            timeout_seconds=float(config["runtime"]["hard_limit_hours"]) * 3600,
+        )
+        if watched.timed_out:
+            destination = (
+                PATIENT_MULTIMODAL_REPORTS_DIR
+                / f"{config['experiment_code']}-fold{args.fold}-hard-timeout.json"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(
+                json.dumps(
+                    {
+                        "status": "HARD_TIME_LIMIT_REACHED",
+                        "outer_fold": args.fold,
+                        "experiment_code": config["experiment_code"],
+                        "hard_limit_hours": config["runtime"]["hard_limit_hours"],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        return watched.returncode
     configure_conservative_threads()
     set_below_normal_priority()
 
@@ -387,6 +423,8 @@ def main() -> int:
             for epoch in range(first_epoch, epochs):
                 bag_datasets["train"].set_epoch(epoch)
                 sampler.generator.manual_seed(seed + epoch)
+                encoder_lr_used = optimizer.param_groups[0]["lr"]
+                head_lr_used = optimizer.param_groups[1]["lr"]
                 train_result = run_patient_epoch(
                     model,
                     loaders["train"],
@@ -418,16 +456,18 @@ def main() -> int:
                 elapsed_hours = (time.monotonic() - started) / 3600
                 snapshot, _ = collect_resource_snapshot(ROOT)
                 snapshot = replace(snapshot, elapsed_hours=elapsed_hours)
-                peak_gpu_gb = torch.cuda.max_memory_allocated() / (1024**3)
+                peak_allocated_gpu_gb = torch.cuda.max_memory_allocated() / (1024**3)
+                peak_reserved_gpu_gb = torch.cuda.max_memory_reserved() / (1024**3)
                 row = {
                     "epoch": epoch,
                     "train_loss": train_result["loss"],
                     "validation_loss": validation_result["loss"],
                     "validation_macro_f1": validation_metrics["macro_f1"],
-                    "encoder_lr": optimizer.param_groups[0]["lr"],
-                    "head_lr": optimizer.param_groups[1]["lr"],
+                    "encoder_lr": encoder_lr_used,
+                    "head_lr": head_lr_used,
                     "elapsed_hours": elapsed_hours,
-                    "peak_gpu_memory_gb": peak_gpu_gb,
+                    "peak_gpu_memory_allocated_gb": peak_allocated_gpu_gb,
+                    "peak_gpu_memory_reserved_gb": peak_reserved_gpu_gb,
                     "resource": asdict(snapshot),
                 }
                 history.append(row)
@@ -436,7 +476,8 @@ def main() -> int:
                         "train_loss": row["train_loss"],
                         "validation_loss": row["validation_loss"],
                         "validation_macro_f1": row["validation_macro_f1"],
-                        "peak_gpu_memory_gb": peak_gpu_gb,
+                        "peak_gpu_memory_allocated_gb": peak_allocated_gpu_gb,
+                        "peak_gpu_memory_reserved_gb": peak_reserved_gpu_gb,
                         "elapsed_hours": elapsed_hours,
                     },
                     step=epoch,
@@ -470,11 +511,12 @@ def main() -> int:
                 print(
                     f"epoch={epoch + 1}/{epochs} train_loss={row['train_loss']:.4f} "
                     f"val_macro_f1={row['validation_macro_f1']:.4f} "
-                    f"elapsed={elapsed_hours:.2f}h peak_gpu={peak_gpu_gb:.2f}GB"
+                    f"elapsed={elapsed_hours:.2f}h "
+                    f"peak_gpu_reserved={peak_reserved_gpu_gb:.2f}GB"
                 )
 
                 decision = evaluate_runtime(snapshot, policy)
-                if peak_gpu_gb > policy.gpu_memory_budget_gb:
+                if peak_reserved_gpu_gb > policy.gpu_memory_budget_gb:
                     stop_status = "RESOURCE_GUARD_STOPPED"
                     break
                 if args.pilot and elapsed_hours >= 1.0:
@@ -500,7 +542,12 @@ def main() -> int:
                     "best_validation_macro_f1": stopping.best_score,
                     "best_epoch": stopping.best_epoch,
                     "elapsed_hours": (time.monotonic() - started) / 3600,
-                    "peak_gpu_memory_gb": torch.cuda.max_memory_allocated() / (1024**3),
+                    "peak_gpu_memory_allocated_gb": (
+                        torch.cuda.max_memory_allocated() / (1024**3)
+                    ),
+                    "peak_gpu_memory_reserved_gb": (
+                        torch.cuda.max_memory_reserved() / (1024**3)
+                    ),
                     "outer_test_iterated": False,
                 }
             elif best_path.is_file():
