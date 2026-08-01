@@ -4,8 +4,11 @@ import numpy as np
 from PIL import Image
 
 from src.research_proxy_audit import (
+    DIMENSION_EXPORT_FEATURES,
+    FEATURE_GROUPS,
     GEOMETRY_FEATURES,
     PIXEL_SAMPLE_LIMIT,
+    ROI_GEOMETRY_FEATURES,
     ProxyTable,
     _sample_strips,
     aggregate_patient_proxy_features,
@@ -128,6 +131,13 @@ def test_proxy_risk_thresholds_are_fixed_before_real_audit():
     assert assess_proxy_risk(0.22, 0.60, 0.01) == "high"
     assert assess_proxy_risk(0.17, 0.61, 0.01) == "moderate"
     assert assess_proxy_risk(0.16, 0.55, 0.50) == "low"
+
+
+def test_proxy_feature_groups_separate_shortcut_sources():
+    assert FEATURE_GROUPS["image_count_only"] == ()
+    assert set(DIMENSION_EXPORT_FEATURES).isdisjoint(ROI_GEOMETRY_FEATURES)
+    assert FEATURE_GROUPS["dimensions_export"] == DIMENSION_EXPORT_FEATURES
+    assert FEATURE_GROUPS["roi_geometry"] == ROI_GEOMETRY_FEATURES
 
 
 def test_proxy_permutation_test_is_reproducible():

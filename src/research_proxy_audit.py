@@ -48,7 +48,31 @@ FULL_BORDER_FEATURES = tuple(f"full_border_{name}" for name in PIXEL_STAT_SUFFIX
 OUTSIDE_ROI_FEATURES = tuple(f"outside_roi_{name}" for name in PIXEL_STAT_SUFFIXES)
 ROI_BORDER_FEATURES = tuple(f"roi_border_{name}" for name in PIXEL_STAT_SUFFIXES)
 
+DIMENSION_EXPORT_FEATURES = (
+    "width",
+    "height",
+    "log_pixel_count",
+    "image_aspect_ratio",
+    "log_bytes_per_pixel",
+    "is_jpeg",
+    "is_png",
+)
+ROI_GEOMETRY_FEATURES = (
+    "roi_x1_fraction",
+    "roi_y1_fraction",
+    "roi_x2_fraction",
+    "roi_y2_fraction",
+    "roi_width_fraction",
+    "roi_height_fraction",
+    "roi_area_fraction",
+    "roi_aspect_ratio",
+)
+
 FEATURE_GROUPS = {
+    "image_count_only": (),
+    "dimensions_export": DIMENSION_EXPORT_FEATURES,
+    "roi_geometry": ROI_GEOMETRY_FEATURES,
+    "outer_pixels": FULL_BORDER_FEATURES + OUTSIDE_ROI_FEATURES,
     "geometry": GEOMETRY_FEATURES,
     "outer_nonmedical": GEOMETRY_FEATURES
     + FULL_BORDER_FEATURES
