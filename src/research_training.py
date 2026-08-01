@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import math
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -21,6 +22,15 @@ def seed_everything(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def warmup_cosine_multiplier(epoch: int, total_epochs: int, warmup_epochs: int) -> float:
+    if total_epochs < 1 or not 0 <= warmup_epochs < total_epochs:
+        raise ValueError("Warmup must be non-negative and shorter than training")
+    if epoch < warmup_epochs:
+        return (epoch + 1) / max(1, warmup_epochs)
+    progress = (epoch - warmup_epochs) / max(1, total_epochs - warmup_epochs)
+    return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
 
 
 def _dataset_labels(dataset: Any) -> tuple[int, ...]:

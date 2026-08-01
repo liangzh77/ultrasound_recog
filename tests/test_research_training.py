@@ -14,6 +14,7 @@ from src.research_training import (
     EarlyStopping,
     make_patient_balanced_sampler,
     run_patient_epoch,
+    warmup_cosine_multiplier,
 )
 
 
@@ -133,3 +134,10 @@ def test_early_stopping_tracks_best_epoch_and_patience():
     assert stopping.update(epoch=2, score=0.3) == (False, True)
     assert stopping.best_epoch == 0
     assert stopping.best_score == 0.4
+
+
+def test_short_pilot_scheduler_does_not_zero_lr_before_final_epoch():
+    values = [warmup_cosine_multiplier(epoch, 5, 3) for epoch in range(5)]
+
+    assert values[:4] == [1 / 3, 2 / 3, 1.0, 1.0]
+    assert values[4] == 0.5

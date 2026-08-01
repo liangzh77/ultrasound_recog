@@ -118,13 +118,12 @@ def _optimizer_and_scheduler(model, config, epochs):
         ],
         weight_decay=float(optimizer_config["weight_decay"]),
     )
+    from src.research_training import warmup_cosine_multiplier
+
     warmup = int(config["training"]["warmup_epochs"])
 
     def multiplier(epoch: int) -> float:
-        if epoch < warmup:
-            return (epoch + 1) / max(1, warmup)
-        progress = (epoch - warmup) / max(1, epochs - warmup - 1)
-        return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+        return warmup_cosine_multiplier(epoch, epochs, warmup)
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, multiplier)
     return optimizer, scheduler
