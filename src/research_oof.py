@@ -55,6 +55,41 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def merge_oof_fold_files(fold_paths: list[Path], output_path: Path) -> Path:
+    if not fold_paths:
+        raise ValueError("At least one OOF fold file is required")
+    rows = []
+    fieldnames = None
+    seen_folds = set()
+    for path in fold_paths:
+        fold_rows = _read_csv(path.resolve())
+        if not fold_rows:
+            raise ValueError(f"OOF fold file is empty: {path.name}")
+        current_fields = list(fold_rows[0])
+        if fieldnames is None:
+            fieldnames = current_fields
+        elif current_fields != fieldnames:
+            raise ValueError("OOF fold files use different columns")
+        folds = {int(row["outer_fold"]) for row in fold_rows}
+        if len(folds) != 1:
+            raise ValueError("Each OOF fold file must contain exactly one outer fold")
+        fold = folds.pop()
+        if fold in seen_folds:
+            raise ValueError(f"Duplicate outer fold: {fold}")
+        seen_folds.add(fold)
+        rows.extend(fold_rows)
+    person_keys = [row["person_key"] for row in rows]
+    if len(person_keys) != len(set(person_keys)):
+        raise ValueError("Merged OOF person_key values must be unique")
+    rows.sort(key=lambda row: row["person_key"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return output_path.resolve()
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:

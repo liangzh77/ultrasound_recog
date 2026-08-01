@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.research_oof import evaluate_oof_file
+from src.research_oof import evaluate_oof_file, merge_oof_fold_files
 
 
 CLASSES = (
@@ -115,3 +115,26 @@ def test_evaluate_oof_file_rejects_outer_fold_mismatch(tmp_path):
             n_bootstrap=5,
             seed=17,
         )
+
+
+def test_merge_oof_fold_files_requires_unique_folds_and_patients(tmp_path):
+    source = _predictions(tmp_path)
+    with source.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    fold_paths = []
+    for fold in (0, 1):
+        path = tmp_path / f"fold_{fold}.csv"
+        _write_csv(path, [row for row in rows if int(row["outer_fold"]) == fold])
+        fold_paths.append(path)
+
+    destination = merge_oof_fold_files(fold_paths, tmp_path / "merged.csv")
+
+    with destination.open(encoding="utf-8-sig", newline="") as handle:
+        merged = list(csv.DictReader(handle))
+    assert len(merged) == 12
+    assert [row["person_key"] for row in merged] == sorted(
+        row["person_key"] for row in merged
+    )
+
+    with pytest.raises(ValueError, match="Duplicate outer fold"):
+        merge_oof_fold_files([fold_paths[0], fold_paths[0]], tmp_path / "bad.csv")

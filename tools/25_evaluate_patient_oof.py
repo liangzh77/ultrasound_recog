@@ -14,12 +14,18 @@ from src.common_paths import (  # noqa: E402
     PATIENT_MULTIMODAL_REGISTRY_DIR,
     PATIENT_MULTIMODAL_REPORTS_DIR,
 )
-from src.research_oof import compare_oof_files, evaluate_oof_file  # noqa: E402
+from src.research_oof import (  # noqa: E402
+    compare_oof_files,
+    evaluate_oof_file,
+    merge_oof_fold_files,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--predictions", type=Path, required=True)
+    parser.add_argument("--predictions", type=Path)
+    parser.add_argument("--fold-files", type=Path, nargs="+")
+    parser.add_argument("--merged-output", type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--registry", type=Path, default=PATIENT_MULTIMODAL_REGISTRY_DIR)
     parser.add_argument("--output", type=Path)
@@ -32,8 +38,15 @@ def main() -> int:
     args = parse_args()
     if args.bootstrap < 1:
         raise ValueError("--bootstrap must be positive")
+    if (args.predictions is None) == (args.fold_files is None):
+        raise ValueError("Use exactly one of --predictions or --fold-files")
+    prediction_path = args.predictions
+    if args.fold_files is not None:
+        if args.merged_output is None:
+            raise ValueError("--merged-output is required with --fold-files")
+        prediction_path = merge_oof_fold_files(args.fold_files, args.merged_output)
     report = evaluate_oof_file(
-        args.predictions,
+        prediction_path,
         args.registry,
         n_bootstrap=args.bootstrap,
         seed=args.seed,
@@ -41,7 +54,7 @@ def main() -> int:
     if args.baseline is not None:
         report["paired_comparison"] = compare_oof_files(
             args.baseline,
-            args.predictions,
+            prediction_path,
             args.registry,
             n_bootstrap=args.bootstrap,
             seed=args.seed,
@@ -49,7 +62,7 @@ def main() -> int:
     output = args.output or (
         PATIENT_MULTIMODAL_REPORTS_DIR
         / "oof"
-        / f"{args.predictions.stem}_evaluation.json"
+        / f"{prediction_path.stem}_evaluation.json"
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
