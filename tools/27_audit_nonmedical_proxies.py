@@ -41,6 +41,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bootstrap", type=int, default=2_000)
     parser.add_argument("--seed", type=int, default=20260724)
     parser.add_argument(
+        "--groups",
+        nargs="+",
+        choices=tuple(FEATURE_GROUPS),
+        default=list(FEATURE_GROUPS),
+        help="Feature groups to evaluate; defaults to every registered group.",
+    )
+    parser.add_argument(
+        "--report-name",
+        default="nonmedical_proxy_audit.json",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=PATIENT_MULTIMODAL_REPORTS_DIR / "proxy_audit",
@@ -174,6 +185,10 @@ def main() -> int:
     args = parse_args()
     if args.permutations < 1 or args.bootstrap < 1:
         raise ValueError("Permutation and bootstrap counts must be positive")
+    if len(args.groups) != len(set(args.groups)):
+        raise ValueError("Each proxy feature group may be selected only once")
+    if Path(args.report_name).name != args.report_name or not args.report_name.endswith(".json"):
+        raise ValueError("report-name must be a plain JSON file name")
     configure_conservative_threads(ResourcePolicy())
     priority_reduced = set_below_normal_priority()
     output_dir = args.output_dir.resolve()
@@ -192,7 +207,8 @@ def main() -> int:
 
     expected_people = {row["person_key"] for row in rows}
     results = {}
-    for group_index, (group_name, image_features) in enumerate(FEATURE_GROUPS.items()):
+    selected_groups = [(name, FEATURE_GROUPS[name]) for name in args.groups]
+    for group_index, (group_name, image_features) in enumerate(selected_groups):
         print(f"evaluating {group_name}", flush=True)
         table = aggregate_patient_proxy_features(rows, image_features)
         probabilities = run_proxy_oof(
@@ -262,6 +278,7 @@ def main() -> int:
         "seed": args.seed,
         "bootstrap_samples": args.bootstrap,
         "permutation_samples": args.permutations,
+        "selected_groups": list(args.groups),
         "registry_sha256": _registry_digest(registry_dir),
         "priority_reduced": priority_reduced,
         "prohibited_features": [
@@ -279,7 +296,7 @@ def main() -> int:
         },
         "results": results,
     }
-    report_path = output_dir / "nonmedical_proxy_audit.json"
+    report_path = output_dir / args.report_name
     report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
