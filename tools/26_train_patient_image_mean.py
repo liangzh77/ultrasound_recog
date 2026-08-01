@@ -22,7 +22,10 @@ from src.common_paths import (  # noqa: E402
     PATIENT_MULTIMODAL_REGISTRY_DIR,
     PATIENT_MULTIMODAL_REPORTS_DIR,
 )
-from src.research_config import load_research_config  # noqa: E402
+from src.research_config import (  # noqa: E402
+    load_research_config,
+    resolve_pretrained_weights,
+)
 from src.research_runtime import (  # noqa: E402
     ResourcePolicy,
     collect_resource_snapshot,
@@ -165,6 +168,7 @@ def _write_predictions(path: Path, result, outer_fold: int, model_id: str) -> No
 def main() -> int:
     args = parse_args()
     config = load_research_config(args.config.resolve())
+    pretrained_path = resolve_pretrained_weights(config, ROOT)
     configure_conservative_threads()
     set_below_normal_priority()
 
@@ -235,6 +239,7 @@ def main() -> int:
         "dataset_version": source_freeze["dataset_version_short"],
         "git_revision": revision,
         "git_dirty": dirty,
+        "pretrained_sha256": config["model"]["pretrained_sha256"],
         "split_counts": split_counts,
         "outer_test_used_for_training_or_early_stopping": False,
         "resource_start": asdict(start_snapshot),
@@ -304,6 +309,7 @@ def main() -> int:
     encoder, feature_dim = create_timm_encoder(
         config["model"]["name"],
         pretrained=bool(config["model"]["pretrained"]),
+        pretrained_path=pretrained_path,
     )
     model = MaskedMeanClassifier(
         encoder,

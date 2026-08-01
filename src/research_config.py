@@ -3,10 +3,34 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+def resolve_pretrained_weights(config: dict[str, Any], project_root: Path) -> Path:
+    model = config["model"]
+    relative = Path(model["pretrained_path"])
+    if relative.is_absolute():
+        raise ValueError("pretrained_path must be project-relative")
+    root = project_root.resolve()
+    path = (root / relative).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as error:
+        raise ValueError("pretrained_path escapes project root") from error
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    digest = hasher.hexdigest()
+    if digest != str(model["pretrained_sha256"]).casefold():
+        raise ValueError("Pretrained weight SHA-256 mismatch")
+    return path
 
 
 def load_research_config(path: Path) -> dict[str, Any]:
@@ -35,6 +59,10 @@ def load_research_config(path: Path) -> dict[str, Any]:
         raise ValueError("num_workers must be between 0 and 3")
     if model.get("num_classes") != 6:
         raise ValueError("The frozen primary diagnosis task has six classes")
+    if model.get("pretrained") is not True:
+        raise ValueError("E0/E1 formal configs require ImageNet-1K pretraining")
+    if not model.get("pretrained_path") or not model.get("pretrained_sha256"):
+        raise ValueError("Local pretrained path and SHA-256 are required")
     if int(training.get("max_epochs", 0)) > 60:
         raise ValueError("max_epochs cannot exceed 60")
     if int(training.get("pilot_epochs", 0)) > 5:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 from torch import nn
 
@@ -9,14 +11,25 @@ from torch import nn
 def create_timm_encoder(
     model_name: str,
     pretrained: bool,
+    pretrained_path: Path | None = None,
 ) -> tuple[nn.Module, int]:
     import timm
 
+    options = {}
+    if pretrained_path is not None:
+        if not pretrained:
+            raise ValueError("A pretrained path requires pretrained=True")
+        options["pretrained_cfg_overlay"] = {
+            "file": str(pretrained_path.resolve()),
+            "hf_hub_id": None,
+            "url": "",
+        }
     encoder = timm.create_model(
         model_name,
         pretrained=pretrained,
         num_classes=0,
         global_pool="avg",
+        **options,
     )
     return encoder, int(encoder.num_features)
 

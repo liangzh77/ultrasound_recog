@@ -10,6 +10,8 @@ data:
 model:
   name: efficientnet_b2.ra_in1k
   pretrained: true
+  pretrained_path: assets/pretrained/efficientnet_b2_ra-bcdf34b7.pth
+  pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
   num_classes: 6
   dropout: 0.30
 optimizer:

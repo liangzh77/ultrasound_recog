@@ -4,7 +4,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from src.research_config import assert_configs_differ_only, load_research_config
+from src.research_config import (
+    assert_configs_differ_only,
+    load_research_config,
+    resolve_pretrained_weights,
+)
 from src.research_models import MaskedMeanClassifier
 from src.research_training import (
     EarlyStopping,
@@ -59,6 +63,29 @@ def test_e0_e1_configs_differ_only_by_experiment_and_input_mode():
     assert e0["input_mode"] == "full"
     assert e1["input_mode"] == "roi"
     assert_configs_differ_only(e0, e1, {"experiment_code", "input_mode"})
+
+
+def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):
+    weights = tmp_path / "weights.bin"
+    weights.write_bytes(b"known weights")
+    config = {
+        "model": {
+            "pretrained_path": "weights.bin",
+            "pretrained_sha256": (
+                "752bf40592a4d8d9399e2342ae9534157e986085711d0af1f49f0b62879d57dd"
+            ),
+        }
+    }
+
+    assert resolve_pretrained_weights(config, tmp_path) == weights.resolve()
+
+    config["model"]["pretrained_sha256"] = "0" * 64
+    try:
+        resolve_pretrained_weights(config, tmp_path)
+    except ValueError as error:
+        assert "SHA-256 mismatch" in str(error)
+    else:
+        raise AssertionError("A mismatched pretrained hash must be rejected")
 
 
 def test_patient_balanced_sampler_uses_inverse_patient_class_frequency():
