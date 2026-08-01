@@ -34,7 +34,7 @@ ultrasound_recog/
   `workspace/experiments/active/exp_2026-04_roi_poly_seg`
 - 当前患者级多模态诊断研究：
   `workspace/experiments/active/exp_2026-07_patient_multimodal_v1`
-  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、ROI/bag 数据接口、患者级 OOF 评价框架和 E0/E1 fold 0 资源试验，下一步运行 E0/E1 正式五折。
+  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、ROI/bag 数据接口、患者级 OOF 评价框架及 E0/E1 正式五折；当前正在完成非医学代理特征审计和检查点 A1。
 
 每个实验目录独立保存：
 
@@ -118,6 +118,9 @@ tools/26_train_patient_image_mean.py
 - 新一轮患者级多模态诊断研究实施计划：
   `docs/project/新一轮患者级多模态诊断研究实施计划_v1.0_2026-07-24.md`
   — 将研究方案落实为数据冻结、外层五折/内层早停、E0～F2 实验矩阵、默认训练参数、统计门槛、RTX 3080 与磁盘预算、可执行任务和阶段停止规则。
+- E0/E1 整图与 ROI 五折基线结果：
+  `docs/project/E0_E1整图与ROI五折基线结果_2026-08-02.md`
+  — 记录 967 名患者正式五折 OOF、配对 bootstrap、每类灵敏度和 ROI 门槛判断，说明为何检查点 A1 尚不能直接冻结 ROI。
 - 架构决策记录：
   `docs/decisions/ADR-001-采用患者级六类主要诊断与分层多模态融合.md`
   — 说明为何排除滑膜囊肿主要诊断、为何不能直接做六类图像/Excel 融合，以及为何采用患者多图和软融合架构。
