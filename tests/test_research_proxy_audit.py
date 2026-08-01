@@ -5,7 +5,9 @@ from PIL import Image
 
 from src.research_proxy_audit import (
     GEOMETRY_FEATURES,
+    PIXEL_SAMPLE_LIMIT,
     ProxyTable,
+    _sample_strips,
     aggregate_patient_proxy_features,
     assess_proxy_risk,
     extract_image_proxy_features,
@@ -35,6 +37,14 @@ def test_extract_proxy_features_uses_only_registered_nonclinical_signals(tmp_pat
     assert features["is_jpeg"] == 1
     forbidden = {"diagnosis", "person", "path", "filename", "name"}
     assert not any(token in key.casefold() for key in features for token in forbidden)
+
+
+def test_edge_statistics_never_materialize_more_than_fixed_sample_limit():
+    strips = [np.zeros((500, 500, 3), dtype=np.uint8) for _ in range(4)]
+
+    sampled = _sample_strips(strips)
+
+    assert len(sampled) <= PIXEL_SAMPLE_LIMIT
 
 
 def test_patient_aggregation_is_deterministic_and_rejects_mixed_metadata():

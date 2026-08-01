@@ -60,6 +60,7 @@ HIGH_PROXY_MACRO_F1 = 0.20
 HIGH_PROXY_MACRO_AUC = 0.65
 MODERATE_PROXY_MACRO_F1 = 0.17
 MODERATE_PROXY_MACRO_AUC = 0.58
+PIXEL_SAMPLE_LIMIT = 4_096
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,10 @@ def _clamped_roi(
     return x1, y1, x2, y2
 
 
-def _sample_strips(strips: Iterable[np.ndarray], limit: int = 50_000) -> np.ndarray:
+def _sample_strips(
+    strips: Iterable[np.ndarray],
+    limit: int = PIXEL_SAMPLE_LIMIT,
+) -> np.ndarray:
     flattened = [item.reshape(-1, 3) for item in strips if item.size]
     if not flattened:
         return np.zeros((1, 3), dtype=np.uint8)
