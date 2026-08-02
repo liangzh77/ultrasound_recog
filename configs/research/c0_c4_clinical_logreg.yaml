@@ -1,0 +1,104 @@
+study_code: C0-C4
+seed: 20260724
+base_data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+clinical_classes:
+  - 类风湿性关节炎
+  - 痛风性关节炎
+  - 脊柱关节炎
+  - 骨性关节炎
+  - 损伤
+feature_contract:
+  allowed_model_features:
+    - sex
+    - age_years
+    - esr_mm_h
+    - crp_mg_l
+    - anti_ccp_u_ml
+    - rf_iu_ml
+    - hla_b27
+    - uric_acid
+  laboratory_features:
+    - esr_mm_h
+    - crp_mg_l
+    - anti_ccp_u_ml
+    - rf_iu_ml
+    - hla_b27
+    - uric_acid
+  forbidden_source_fields:
+    - 诊断
+    - 编号
+    - 姓名
+    - 病程
+    - 超声检查日期
+    - 日期
+    - 路径
+    - 文件名
+  hla_b27_missing_value: 0.5
+  accepted_missing_tokens: ['', '/', 未查, 未检查, 无]
+  nonnumeric_lab_policy: set_missing_and_audit
+experiments:
+  C0:
+    features: []
+    estimator: outer_train_class_frequency
+    purpose: no_information_majority_baseline
+  C1:
+    features: [sex, age_years]
+    estimator: multinomial_logistic_regression
+    purpose: demographic_bias_baseline
+  C2:
+    features:
+      - esr_mm_h_missing
+      - crp_mg_l_missing
+      - anti_ccp_u_ml_missing
+      - rf_iu_ml_missing
+      - hla_b27_missing
+      - uric_acid_missing
+    estimator: multinomial_logistic_regression
+    purpose: workflow_missingness_bias_audit
+  C3:
+    features:
+      - sex
+      - age_years
+      - esr_mm_h
+      - crp_mg_l
+      - anti_ccp_u_ml
+      - rf_iu_ml
+      - hla_b27
+      - uric_acid
+    estimator: multinomial_logistic_regression
+    purpose: primary_clinical_numeric_baseline
+  C4:
+    features:
+      - sex
+      - age_years
+      - esr_mm_h
+      - crp_mg_l
+      - anti_ccp_u_ml
+      - rf_iu_ml
+      - hla_b27
+      - uric_acid
+      - esr_mm_h_missing
+      - crp_mg_l_missing
+      - anti_ccp_u_ml_missing
+      - rf_iu_ml_missing
+      - hla_b27_missing
+      - uric_acid_missing
+    estimator: multinomial_logistic_regression
+    purpose: explicit_missingness_sensitivity_only
+model:
+  solver: lbfgs
+  C: 1.0
+  class_weight: balanced
+  max_iter: 2000
+  continuous_imputation: outer_train_median
+  scaling: outer_train_standard
+evaluation:
+  outer_folds: [0, 1, 2, 3, 4]
+  seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260724
+  primary_metric: macro_f1
+runtime:
+  max_cpu_threads: 2
+  target_hours_per_experiment: 1.0
+  hard_limit_hours_per_experiment: 2.0
