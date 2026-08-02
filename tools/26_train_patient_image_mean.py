@@ -28,9 +28,9 @@ from src.research_config import (  # noqa: E402
 )
 from src.research_runtime import (  # noqa: E402
     ResourcePolicy,
+    RuntimeGuard,
     collect_resource_snapshot,
     configure_conservative_threads,
-    evaluate_runtime,
     evaluate_training_start,
     set_below_normal_priority,
 )
@@ -435,6 +435,7 @@ def main() -> int:
     stopping = EarlyStopping(
         patience=int(config["training"]["early_stopping_patience"])
     )
+    runtime_guard = RuntimeGuard(policy)
 
     code = config["experiment_code"]
     mode_suffix = "pilot" if args.pilot else "formal"
@@ -466,6 +467,7 @@ def main() -> int:
     )
     started = time.monotonic()
     stop_status = "COMPLETED"
+    stop_reasons: list[str] = []
     torch.cuda.reset_peak_memory_stats()
     with tracker.parent_run(
         run_id,
@@ -588,15 +590,18 @@ def main() -> int:
                     f"peak_gpu_reserved={peak_reserved_gpu_gb:.2f}GB"
                 )
 
-                decision = evaluate_runtime(snapshot, policy)
+                decision = runtime_guard.evaluate(snapshot)
                 if peak_reserved_gpu_gb > policy.gpu_memory_budget_gb:
                     stop_status = "RESOURCE_GUARD_STOPPED"
+                    stop_reasons = ["peak_gpu_memory_above_configured_budget"]
                     break
                 if args.pilot and elapsed_hours >= 1.0:
                     stop_status = "TIME_BUDGET_REACHED"
+                    stop_reasons = ["pilot_elapsed_above_1h"]
                     break
                 if not decision.allowed:
                     stop_status = decision.status
+                    stop_reasons = list(decision.reasons)
                     break
                 if should_stop and not args.pilot:
                     stop_status = "EARLY_STOPPED"
@@ -623,6 +628,7 @@ def main() -> int:
                     ),
                     "outer_test_iterated": False,
                     "stop_reason": stop_status,
+                    "stop_reasons": stop_reasons,
                 }
             elif best_path.is_file():
                 best = torch.load(best_path, map_location="cuda", weights_only=False)
@@ -667,6 +673,7 @@ def main() -> int:
                         torch.cuda.max_memory_reserved() / (1024**3)
                     ),
                     "stop_reason": stop_status,
+                    "stop_reasons": stop_reasons,
                 }
                 if aggregation == "gated_attention":
                     attention_path = (

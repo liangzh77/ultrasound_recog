@@ -158,20 +158,23 @@ def validate_experiment_record(
                 path = _resolve_project_file(project_root, str(item["path"]))
                 if not path.is_file() or sha256_file(path) != str(item["sha256"]):
                     raise ValueError(f"Additional OOF artifact mismatch for {record['id']}")
-            result = record["results"]
-            for path_key, relative_path in result.items():
-                if not path_key.endswith("_path"):
-                    continue
-                hash_key = f"{path_key[:-5]}_sha256"
-                if hash_key not in result:
-                    raise ValueError(f"Result path {path_key} has no matching SHA-256")
-                _validate_hash(str(result[hash_key]), hash_key)
-                artifact_path = _resolve_project_file(project_root, str(relative_path))
-                if (
-                    not artifact_path.is_file()
-                    or sha256_file(artifact_path) != str(result[hash_key])
-                ):
-                    raise ValueError(f"Result artifact mismatch for {record['id']}: {path_key}")
+    if verify_artifacts:
+        result = record["results"]
+        for path_key, relative_path in result.items():
+            if not path_key.endswith("_path"):
+                continue
+            hash_key = f"{path_key[:-5]}_sha256"
+            if hash_key not in result:
+                raise ValueError(f"Result path {path_key} has no matching SHA-256")
+            _validate_hash(str(result[hash_key]), hash_key)
+            artifact_path = _resolve_project_file(project_root, str(relative_path))
+            if (
+                not artifact_path.is_file()
+                or sha256_file(artifact_path) != str(result[hash_key])
+            ):
+                raise ValueError(
+                    f"Result artifact mismatch for {record['id']}: {path_key}"
+                )
 
 
 def validate_research_ledger(

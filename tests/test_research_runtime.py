@@ -3,6 +3,7 @@ import os
 from src.research_runtime import (
     ResourcePolicy,
     ResourceSnapshot,
+    RuntimeGuard,
     configure_conservative_threads,
     evaluate_runtime,
     evaluate_training_start,
@@ -47,22 +48,55 @@ def test_runtime_uses_soft_deadline_before_hard_deadline():
     )
 
 
-def test_runtime_stops_for_sustained_resource_pressure():
+def test_runtime_stops_immediately_for_critically_low_memory():
     result = evaluate_runtime(
-        snapshot(
-            memory_available_gb=3.5,
-            cpu_average_percent=85.0,
-            gpu_temperature_c=89.0,
-        ),
+        snapshot(memory_available_gb=3.5),
         ResourcePolicy(),
     )
 
     assert result.status == "RESOURCE_GUARD_STOPPED"
-    assert set(result.reasons) == {
-        "memory_available_below_4gb",
-        "cpu_average_above_80pct",
-        "gpu_temperature_above_88c",
-    }
+    assert result.reasons == ("memory_available_below_4gb",)
+
+
+def test_runtime_guard_ignores_spike_and_stops_only_after_sustained_pressure():
+    guard = RuntimeGuard(ResourcePolicy(), sustained_pressure_seconds=300)
+
+    first = guard.evaluate(
+        snapshot(elapsed_hours=1.0, cpu_average_percent=100.0)
+    )
+    recovered = guard.evaluate(
+        snapshot(elapsed_hours=1.03, cpu_average_percent=20.0)
+    )
+    second_spike = guard.evaluate(
+        snapshot(elapsed_hours=2.0, cpu_average_percent=90.0)
+    )
+    four_minutes = guard.evaluate(
+        snapshot(elapsed_hours=2.066, cpu_average_percent=90.0)
+    )
+    five_minutes = guard.evaluate(
+        snapshot(elapsed_hours=2.084, cpu_average_percent=90.0)
+    )
+
+    assert first.status == "CONTINUE"
+    assert recovered.status == "CONTINUE"
+    assert second_spike.status == "CONTINUE"
+    assert four_minutes.status == "CONTINUE"
+    assert five_minutes.status == "RESOURCE_GUARD_STOPPED"
+    assert five_minutes.reasons == ("cpu_average_above_80pct_for_5min",)
+
+
+def test_runtime_guard_requires_sustained_critical_gpu_temperature():
+    guard = RuntimeGuard(ResourcePolicy(), sustained_pressure_seconds=300)
+
+    assert guard.evaluate(
+        snapshot(elapsed_hours=0.0, gpu_temperature_c=89.0)
+    ).allowed
+    result = guard.evaluate(
+        snapshot(elapsed_hours=0.1, gpu_temperature_c=89.0)
+    )
+
+    assert result.status == "RESOURCE_GUARD_STOPPED"
+    assert result.reasons == ("gpu_temperature_above_88c_for_5min",)
 
 
 def test_conservative_thread_configuration_sets_expected_limits(monkeypatch):

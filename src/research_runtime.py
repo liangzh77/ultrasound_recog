@@ -49,6 +49,55 @@ class GuardDecision:
     reasons: tuple[str, ...] = ()
 
 
+@dataclass
+class RuntimeGuard:
+    """Track sustained CPU/GPU pressure across epoch-boundary snapshots."""
+
+    policy: ResourcePolicy
+    sustained_pressure_seconds: float = 300.0
+    cpu_high_since_seconds: float | None = None
+    gpu_hot_since_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.sustained_pressure_seconds <= 0:
+            raise ValueError("sustained_pressure_seconds must be positive")
+
+    def evaluate(self, current: ResourceSnapshot) -> GuardDecision:
+        immediate = evaluate_runtime(current, self.policy)
+        if not immediate.allowed:
+            return immediate
+
+        observed_seconds = current.elapsed_hours * 3600.0
+        reasons = []
+        if current.cpu_average_percent > self.policy.stop_cpu_average_percent:
+            if self.cpu_high_since_seconds is None:
+                self.cpu_high_since_seconds = observed_seconds
+            elif (
+                observed_seconds - self.cpu_high_since_seconds
+                >= self.sustained_pressure_seconds
+            ):
+                reasons.append("cpu_average_above_80pct_for_5min")
+        else:
+            self.cpu_high_since_seconds = None
+
+        if current.gpu_temperature_c > self.policy.stop_gpu_temperature_c:
+            if self.gpu_hot_since_seconds is None:
+                self.gpu_hot_since_seconds = observed_seconds
+            elif (
+                observed_seconds - self.gpu_hot_since_seconds
+                >= self.sustained_pressure_seconds
+            ):
+                reasons.append("gpu_temperature_above_88c_for_5min")
+        else:
+            self.gpu_hot_since_seconds = None
+
+        return GuardDecision(
+            allowed=not reasons,
+            status="CONTINUE" if not reasons else "RESOURCE_GUARD_STOPPED",
+            reasons=tuple(reasons),
+        )
+
+
 def evaluate_training_start(
     current: ResourceSnapshot,
     policy: ResourcePolicy,
@@ -87,10 +136,6 @@ def evaluate_runtime(
     reasons = []
     if current.memory_available_gb < policy.stop_memory_available_gb:
         reasons.append("memory_available_below_4gb")
-    if current.cpu_average_percent > policy.stop_cpu_average_percent:
-        reasons.append("cpu_average_above_80pct")
-    if current.gpu_temperature_c > policy.stop_gpu_temperature_c:
-        reasons.append("gpu_temperature_above_88c")
     return GuardDecision(
         allowed=not reasons,
         status="CONTINUE" if not reasons else "RESOURCE_GUARD_STOPPED",

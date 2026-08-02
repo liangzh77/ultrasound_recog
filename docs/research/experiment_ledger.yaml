@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T23:10:00+08:00
+updated_at: 2026-08-02T23:35:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -284,3 +284,39 @@ experiments:
     failure_or_negative_reason: not_applicable_pipeline_passed_score_not_used_for_selection
     conclusion: 资源与隔离合同通过，允许启动E2正式固定五折
     next_step: 从fold 0开始顺序运行E2正式五折并逐折登记
+
+  - id: E2-fold0-formal-attempt1-resource-stop
+    kind: stopped_formal_attempt
+    status: resource_guard_false_positive
+    research_question: E2正式fold 0能否按固定配置完成并生成患者级OOF
+    preregistered_gate: 仅持续5分钟CPU超过80%才资源停止；外层测试只在最佳权重冻结后迭代一次
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 5e01dd5df4fd616e9b44bdd74fff5e367a29f43a
+    config:
+      path: configs/research/e2_roi_gated_attention_b2.yaml
+      source: git_blob_at_commit
+      sha256: 3e4693b94b09d3b8da1853659581975030940456979b3041cdad48be115c029a
+    command: python tools/29_train_patient_mil.py --config configs/research/e2_roi_gated_attention_b2.yaml --fold 0
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours: 0.3923739147
+    peak_allocated_gpu_gb: 1.2578048706
+    peak_reserved_gpu_gb: 1.3593750000
+    outer_test_iterated: false
+    oof: not_applicable_outer_test_not_iterated
+    results:
+      epochs_completed: 15
+      best_validation_macro_f1: 0.3770902105
+      best_epoch: 8
+      checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2/fold_0/best_formal.pt
+      checkpoint_sha256: ce5a793cde61c408b7ff450d2f91f32c7c249b4765454af24676ba2f21bba55d
+      stopped_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E2-fold0-seed20260724-formal-attempt1-resource-stop_summary.json
+      stopped_summary_sha256: 4c3c6a3de28e085bd5fe89fdd5f2a59ff0fd078ca9145750a3ece51455fad660
+    mlflow_parent_run_ids: [7fb9531399ca46d6a41cf03d90e01c05]
+    mlflow_fold_run_ids: [1560d5f73c274258bde75a02bc8c08a1]
+    markdown_report: docs/research/logs/2026-08-02.md
+    failure_or_negative_reason: 单次1秒CPU采样100%被旧实现误判为持续5分钟压力；外层test未迭代
+    conclusion: 失败尝试保留；修复有状态持续压力判断后从同一checkpoint恢复
+    next_step: 提交修复并使用--resume继续fold 0
