@@ -268,6 +268,7 @@ def main() -> int:
     run_contract = {
         "experiment_code": config["experiment_code"],
         "input_mode": config["input_mode"],
+        "resize_mode": config["data"]["resize_mode"],
         "outer_fold": args.fold,
         "seed": seed,
         "pilot": args.pilot,
@@ -295,16 +296,20 @@ def main() -> int:
         return 2
 
     data_config = config["data"]
+    resize_mode = data_config["resize_mode"]
     letterbox_fill = estimate_letterbox_fill(
         record_sets["train"],
         input_mode=config["input_mode"],
         seed=seed,
     )
-    run_contract["letterbox_fill_rgb"] = list(letterbox_fill)
+    run_contract["augmentation_fill_rgb"] = list(letterbox_fill)
+    if resize_mode == "letterbox":
+        run_contract["letterbox_fill_rgb"] = list(letterbox_fill)
     image_datasets = {
         split: ResearchImageDataset(
             records,
             input_mode=config["input_mode"],
+            resize_mode=resize_mode,
             output_size=int(data_config["output_size"]),
             image_transform=(
                 build_training_augmentation(letterbox_fill)
@@ -404,6 +409,7 @@ def main() -> int:
             "experiment_code": code,
             "prediction_level": "patient",
             "input_mode": config["input_mode"],
+            "resize_mode": resize_mode,
             "git_revision": revision,
             "git_dirty": dirty,
             "pilot": args.pilot,

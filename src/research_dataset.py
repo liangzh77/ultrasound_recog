@@ -19,6 +19,7 @@ from src.research_transforms import (
     extract_region,
     letterbox_rgb,
     pil_to_imagenet_tensor,
+    stretch_rgb,
 )
 
 
@@ -99,6 +100,7 @@ class ResearchImageDataset(Dataset):
         self,
         records: list[ResearchImageRecord],
         input_mode: str,
+        resize_mode: str = "letterbox",
         output_size: int = 384,
         normalize: bool = True,
         image_transform: Callable[[Image.Image], Image.Image] | None = None,
@@ -106,8 +108,11 @@ class ResearchImageDataset(Dataset):
     ) -> None:
         if input_mode not in {"full", "roi"}:
             raise ValueError(f"Unsupported input_mode: {input_mode}")
+        if resize_mode not in {"letterbox", "stretch"}:
+            raise ValueError(f"Unsupported resize_mode: {resize_mode}")
         self.records = list(records)
         self.input_mode = input_mode
+        self.resize_mode = resize_mode
         self.output_size = output_size
         self.normalize = normalize
         self.image_transform = image_transform
@@ -119,7 +124,14 @@ class ResearchImageDataset(Dataset):
     def load_tensor(self, record: ResearchImageRecord) -> torch.Tensor:
         with Image.open(record.image_path) as source:
             region = extract_region(source, record.roi, self.input_mode)
-            resized = letterbox_rgb(region, self.output_size, fill=self.letterbox_fill)
+            if self.resize_mode == "letterbox":
+                resized = letterbox_rgb(
+                    region,
+                    self.output_size,
+                    fill=self.letterbox_fill,
+                )
+            else:
+                resized = stretch_rgb(region, self.output_size)
             if self.image_transform is not None:
                 resized = self.image_transform(resized)
         return pil_to_imagenet_tensor(resized, normalize=self.normalize)

@@ -79,6 +79,23 @@ def test_optional_training_transform_is_applied_after_shared_letterbox(tmp_path)
     assert float(tensor[2].min()) == 1.0
 
 
+def test_stretch_dataset_removes_explicit_roi_aspect_padding(tmp_path):
+    record = make_record(tmp_path)
+    dataset = ResearchImageDataset(
+        [record],
+        input_mode="roi",
+        resize_mode="stretch",
+        output_size=8,
+        normalize=False,
+    )
+
+    tensor = dataset[0]["image"]
+
+    assert float(tensor[0].max()) == 0.0
+    assert float(tensor[1].min()) == 1.0
+    assert float(tensor[2].max()) == 0.0
+
+
 def test_letterbox_fill_is_estimated_from_selected_training_region_only(tmp_path):
     record = make_record(tmp_path)
 

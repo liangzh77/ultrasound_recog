@@ -1,4 +1,5 @@
 from pathlib import Path
+from copy import deepcopy
 
 import torch
 from torch import nn
@@ -64,6 +65,21 @@ def test_e0_e1_configs_differ_only_by_experiment_and_input_mode():
     assert e0["input_mode"] == "full"
     assert e1["input_mode"] == "roi"
     assert_configs_differ_only(e0, e1, {"experiment_code", "input_mode"})
+
+
+def test_e1s_changes_only_the_preregistered_resize_mode():
+    e1 = load_research_config(ROOT / "configs/research/e1_roi_mean_b2.yaml")
+    e1s = load_research_config(ROOT / "configs/research/e1s_roi_stretch_mean_b2.yaml")
+
+    comparable_e1 = deepcopy(e1)
+    comparable_e1s = deepcopy(e1s)
+    comparable_e1.pop("experiment_code")
+    comparable_e1s.pop("experiment_code")
+    comparable_e1["data"]["resize_mode"] = "stretch"
+
+    assert e1["data"]["resize_mode"] == "letterbox"
+    assert e1s["data"]["resize_mode"] == "stretch"
+    assert comparable_e1 == comparable_e1s
 
 
 def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):

@@ -37,11 +37,13 @@ def load_research_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("Research config must be a mapping")
-    if config.get("experiment_code") not in {"E0", "E1"}:
-        raise ValueError("Only E0/E1 configs are supported by the mean baseline")
+    if config.get("experiment_code") not in {"E0", "E1", "E1S"}:
+        raise ValueError("Only E0/E1/E1S configs are supported by the mean baseline")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi"}[config["experiment_code"]]
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi"}[
+        config["experiment_code"]
+    ]
     if config["input_mode"] != expected_mode:
         raise ValueError("Experiment code and input_mode do not match")
 
@@ -50,7 +52,12 @@ def load_research_config(path: Path) -> dict[str, Any]:
     training = config.get("training", {})
     runtime = config.get("runtime", {})
     if data.get("output_size") != 384:
-        raise ValueError("E0/E1 v1 must use 384 pixel inputs")
+        raise ValueError("E0/E1/E1S v1 must use 384 pixel inputs")
+    expected_resize = {"E0": "letterbox", "E1": "letterbox", "E1S": "stretch"}[
+        config["experiment_code"]
+    ]
+    if data.get("resize_mode") != expected_resize:
+        raise ValueError("Experiment code and resize_mode do not match")
     if not 1 <= int(data.get("max_instances_train", 0)) <= 6:
         raise ValueError("max_instances_train must be between 1 and 6")
     if int(data.get("patient_batch_size", 0)) not in {1, 2}:

@@ -59,6 +59,16 @@ def letterbox_rgb(
     return canvas
 
 
+def stretch_rgb(image: Image.Image, output_size: int) -> Image.Image:
+    """Resize the complete region to a square for geometry sensitivity analysis."""
+    if output_size <= 0:
+        raise ValueError("output_size must be positive")
+    return image.convert("RGB").resize(
+        (output_size, output_size),
+        resample=Image.Resampling.BILINEAR,
+    )
+
+
 def pil_to_imagenet_tensor(
     image: Image.Image,
     normalize: bool = True,

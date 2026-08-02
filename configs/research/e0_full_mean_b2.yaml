@@ -3,6 +3,7 @@ input_mode: full
 seed: 20260724
 data:
   output_size: 384
+  resize_mode: letterbox
   max_instances_train: 6
   patient_batch_size: 1
   effective_patient_batch_size: 8

@@ -6,6 +6,7 @@ from src.research_transforms import (
     extract_region,
     letterbox_rgb,
     pil_to_imagenet_tensor,
+    stretch_rgb,
 )
 
 
@@ -49,6 +50,16 @@ def test_letterbox_preserves_aspect_ratio_and_centers_content():
     assert np.all(pixels[:3] == 0)
     assert np.all(pixels[3:7] == (20, 40, 60))
     assert np.all(pixels[7:] == 0)
+
+
+def test_stretch_resize_keeps_all_pixels_without_letterbox_padding():
+    source = Image.new("RGB", (10, 4), color=(20, 40, 60))
+
+    output = stretch_rgb(source, output_size=10)
+    pixels = np.asarray(output)
+
+    assert output.size == (10, 10)
+    assert np.all(pixels == (20, 40, 60))
 
 
 def test_tensor_conversion_preserves_rgb_channels_before_normalization():
