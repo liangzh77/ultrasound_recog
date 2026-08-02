@@ -1,0 +1,40 @@
+schema_version: 0
+status: draft_not_preregistered
+study: knee_annotation_review_queue_s1a
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+ontology_config: configs/research/annotation_ontology_review_v0.yaml
+seed: 20260802
+required_independent_reviews: 2
+selection:
+  per_target_existing_positive: 25
+  per_target_legacy_unlabeled_candidate: 25
+  per_fold_per_bucket: 5
+  require_unique_image_across_queue: true
+  require_unique_patient_within_target_bucket: true
+  balance_candidate_diagnoses_internally: true
+  diagnosis_visible_to_reviewer: false
+  legacy_annotation_visible_to_reviewer: false
+review_targets:
+  - 滑膜
+  - 滑膜血流
+  - 积液
+  - 骨侵蚀
+  - 骨赘
+  - 痛风石
+  - 结晶
+  - 腘窝囊肿
+review_fields:
+  presence_state: [present, absent_visible, not_in_view, uncertain]
+  image_mode: [B, PD, CD, unknown]
+  annotation_scope: [exhaustive_for_declared_targets, positive_only, uncertain]
+  polygon_action: [keep, adjust, add, remove, not_applicable]
+  subtype_by_target:
+    滑膜: [normal_synovium, synovial_hypertrophy, uncertain]
+    滑膜血流: [synovial_pd, synovial_cd, nonsynovial_signal, uncertain]
+    积液: [joint_effusion, other_fluid, uncertain]
+    骨侵蚀: [erosion, cortical_irregularity_other, uncertain]
+    骨赘: [osteophyte, cortical_prominence_other, uncertain]
+    痛风石: [tophus, other_mass, uncertain]
+    结晶: [double_contour, aggregate, other_calcification, uncertain]
+    腘窝囊肿: [popliteal_cyst, other_cystic_lesion, uncertain]
