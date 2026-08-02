@@ -8,6 +8,35 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: E3-preregistration
+    kind: formal_study_preregistration
+    status: preregistered_implementation_verified
+    research_question: E2的患者级性能增益是否主要来自患者级端到端训练，而不需要可学习且会塌缩的attention权重
+    preregistered_gate: 资源pilot为5 epochs小于1小时、峰值显存不超过9GB且外层test不迭代；正式OOF macro-F1不低于0.3463、相对E1至少+0.01且配对CI下界大于0、至少4/5折高于E1、任一类别F1较E2下降不超过0.05、ECE不高于0.4519且Brier不高于1.0291
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 874456615e4ae879e52ad17e23bf4d5abda49b66
+    config:
+      path: configs/research/e3_roi_mean_feature_b2.yaml
+      source: git_blob_at_commit
+      sha256: 7266d6b1d114dda209bc0af83d22a21eb61661fed7ec38dbf27f696e137c94ac
+    command: python tools/33_train_patient_mean_feature.py --config configs/research/e3_roi_mean_feature_b2.yaml --fold FOLD
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    oof: pending_after_resource_pilot_and_formal_fivefold
+    results:
+      implementation_tests: 16 focused and 116 full passed
+      dry_run_fold_0_split: train 618 patients/2929 images; validation 155/719; outer test 194/895
+      outer_test_used_for_training_or_early_stopping: false
+      mlflow_status: not_started
+      weights_status: not_created
+    mlflow_parent_run_ids: [pending_after_resource_pilot]
+    markdown_report: docs/project/E3_均值特征池化实验预登记_2026-08-02.md
+    failure_or_negative_reason: not_applicable_results_unknown
+    conclusion: 方法、配置和门槛已在结果未知时冻结；尚未形成模型结论
+    next_step: 文档审计和提交后运行fold 0固定5 epoch资源pilot
+
   - id: C0-C4-preregistration
     kind: formal_study_preregistration
     status: executed_completed_linked

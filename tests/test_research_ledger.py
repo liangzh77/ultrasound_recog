@@ -18,7 +18,7 @@ def test_current_research_ledger_has_required_provenance_and_valid_hashes():
     result = validate_research_ledger(LEDGER, ROOT, verify_artifacts=True)
 
     assert result["study_id"] == "knee_patient_multimodal_v1_20260724"
-    assert result["experiments"] == 16
+    assert result["experiments"] == 17
     assert result["formal_models"] == 10
 
 
