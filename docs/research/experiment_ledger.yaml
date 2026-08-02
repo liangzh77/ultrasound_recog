@@ -463,3 +463,31 @@ experiments:
     failure_or_negative_reason: pooled注意力塌缩率0.6225超过0.50且4/5折失败；ECE和Brier较E1恶化
     conclusion: 分类性能门槛明确通过但注意力门槛失败；不直接冻结为图像主模型
     next_step: 按ADR-005运行一次固定系数0.05的E2-R熵正则补救；不搜索第二强度
+
+  - id: E2R-fold0-pilot
+    kind: resource_pilot
+    status: preregistered_ready_to_run
+    research_question: 只增加系数0.05的归一化注意力KL正则后，训练管线是否满足资源、外层隔离和损失记录合同
+    preregistered_gate: 5 epochs小于1小时、峰值显存小于9GB、外层test不迭代、正则损失有机器记录；pilot分数不用于模型选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 0a7205b53cb787432193dd0da9efe2be6dfb093e
+    config:
+      path: configs/research/e2r_roi_gated_attention_entropy_b2.yaml
+      source: git_blob_at_commit
+      sha256: 9c6bc8b66739371b640bf50e24c5d05b75fa1b457f7c4f1eb04aa9f06ed569c8
+    command: python tools/29_train_patient_mil.py --config configs/research/e2r_roi_gated_attention_entropy_b2.yaml --fold 0 --pilot
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime: pending
+    oof: not_applicable_outer_test_must_not_be_iterated
+    results:
+      attention_kl_weight: 0.05
+      implementation_tests: 99 passed
+      dry_run_outer_test_used_for_training_or_early_stopping: false
+    mlflow_parent_run_ids: pending
+    markdown_report: docs/research/logs/2026-08-02.md
+    failure_or_negative_reason: none_before_run
+    conclusion: 实现与配置已提交；允许资源pilot，不允许直接启动正式五折
+    next_step: 提交登记后运行fold 0五epoch资源pilot并核验summary/MLflow
