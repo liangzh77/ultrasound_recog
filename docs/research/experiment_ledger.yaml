@@ -74,7 +74,7 @@ experiments:
 
   - id: E3-fivefold-formal
     kind: formal_model_in_progress
-    status: in_progress_1_of_5
+    status: in_progress_2_of_5
     research_question: 无可学习attention的患者级embedding等权平均能否保留E2相对E1的性能收益并满足类别安全与校准门槛
     preregistered_gate: OOF macro-F1不低于0.3463、相对E1至少+0.01且配对CI下界大于0、至少4/5折高于E1、任一类别F1较E2下降不超过0.05、ECE不高于0.4519且Brier不高于1.0291；全部五折完成后统一判断
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -84,19 +84,23 @@ experiments:
       source: git_blob_at_commit
       sha256: 7266d6b1d114dda209bc0af83d22a21eb61661fed7ec38dbf27f696e137c94ac
     command: python tools/33_train_patient_mean_feature.py --config configs/research/e3_roi_mean_feature_b2.yaml --fold FOLD
-    folds: [0]
-    seeds: [20260724]
+    folds: [0, 1]
+    seeds: [20260724, 20260725]
     planned_folds: [0, 1, 2, 3, 4]
     planned_seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
     hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
-    runtime_hours_by_fold: [0.2732646165]
-    peak_allocated_gpu_gb_by_fold: [1.2451786995]
-    peak_reserved_gpu_gb_by_fold: [1.3496093750]
-    fold_status: [EARLY_STOPPED]
+    runtime_hours_by_fold: [0.2732646165, 0.2399323188]
+    peak_allocated_gpu_gb_by_fold: [1.2451786995, 1.2439160347]
+    peak_reserved_gpu_gb_by_fold: [1.3496093750, 1.3574218750]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED]
     oof:
       path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_fold0.csv
       sha256: bad34efc5afd7ee59cf1c541e4ae6d8523edea620a26e1986baa6495a5e54eb0
+    additional_fold_oof:
+      - fold: 1
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_fold1.csv
+        sha256: a8aafaf0abbf06385451aac58bb20fb7d622242ccb86b23fa073d2b7230e18c7
     results:
       fold_0_patients: 194
       fold_0_images: 895
@@ -113,13 +117,28 @@ experiments:
       fold_0_weight_sha256: 9ff61223b9d43b33b91aced8b6eceef1b9d49c3a3d5d9bd73041657b65312c1c
       fold_0_gout_sensitivity: 0.0
       fold_0_spa_sensitivity: 0.0
+      fold_1_patients: 194
+      fold_1_images: 935
+      fold_1_macro_f1: 0.2746269066
+      fold_1_delta_vs_E1_macro_f1: 0.0990121343
+      fold_1_accuracy: 0.2989690722
+      fold_1_macro_auc: 0.7000850754
+      fold_1_multiclass_brier: 0.8176124949
+      fold_1_ece: 0.1037564152
+      fold_1_best_epoch_zero_based: 1
+      fold_1_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E3-fold1-seed20260725-formal_summary.json
+      fold_1_summary_sha256: d9b77f2d33b22814fe5d8a4d71855e94495cddbccf32f69f33fcf119a5e85a33
+      fold_1_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E3/fold_1/best_formal.pt
+      fold_1_weight_sha256: 949db33e2e0bde406fdd2264d42fe5bc332aac5c3651716be8e22c8af135376b
+      fold_1_gout_sensitivity: 0.1538461538
+      fold_1_spa_sensitivity: 0.3684210526
       outer_test_reference_standard_viewed: false
-    mlflow_parent_run_ids: [bd2a454367334345b2ace45e07b41138]
-    mlflow_fold_run_ids: [06b52a8fc4c144d2ba6bd952e650d808]
+    mlflow_parent_run_ids: [bd2a454367334345b2ace45e07b41138, 78d582cf6f124664b054b2bf07523f87]
+    mlflow_fold_run_ids: [06b52a8fc4c144d2ba6bd952e650d808, fb4bf050a82440a785e24b281be93614]
     markdown_report: docs/project/E3_均值特征池化实验预登记_2026-08-02.md
-    failure_or_negative_reason: fold0 macro-F1比E1同折低0.0126且痛风/SPA灵敏度为0；单折不触发提前停止，须完成固定五折
-    conclusion: fold0提供不利信号但不能作总体模型决定；配置和门槛保持不变
-    next_step: 文档与产物审计、提交登记后运行正式fold1
+    failure_or_negative_reason: fold0低于E1且痛风/SPA灵敏度为0；fold1高于E1但类别仍不均衡；两折方向冲突且不能提前决定
+    conclusion: 当前1/2折高于E1；配置和门槛保持不变，须完成固定五折
+    next_step: 文档与产物审计、提交登记后运行正式fold2
 
   - id: C0-C4-preregistration
     kind: formal_study_preregistration
