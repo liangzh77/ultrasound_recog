@@ -38,3 +38,12 @@ def test_ledger_rejects_absolute_or_raw_patient_paths():
 
     with pytest.raises(ValueError, match="absolute|raw/private"):
         validate_experiment_record(record, ROOT, verify_artifacts=False)
+
+
+def test_in_progress_formal_model_verifies_every_completed_fold_oof():
+    ledger = yaml.safe_load(LEDGER.read_text(encoding="utf-8"))
+    record = deepcopy(ledger["experiments"][-1])
+    record["additional_fold_oof"][0]["sha256"] = "0" * 64
+
+    with pytest.raises(ValueError, match="Additional OOF"):
+        validate_experiment_record(record, ROOT, verify_artifacts=True)
