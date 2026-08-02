@@ -174,7 +174,23 @@ def main() -> int:
             "workbook_contract": source_workbook_contract,
             "validation_git": _git_state(),
         }
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        output_path = _project_output(args.output, sha256_file(input_path))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(
+            json.dumps(
+                {
+                    "status": result["status"],
+                    "ready_for_preregistration": False,
+                    "report": output_path.relative_to(ROOT).as_posix(),
+                    "report_sha256": sha256_file(output_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
 
     if args.completed_workbook is None:
