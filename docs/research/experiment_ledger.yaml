@@ -8,9 +8,123 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: S1-annotation-supervision-audit-formal
+    kind: formal_bias_audit
+    status: completed_direct_28class_route_failed
+    research_question: 规范化28类多边形标注是否在覆盖、几何、患者级五折支持度、类别重叠和疾病捷径方面足以支持后续病变定位或诊断辅助监督
+    preregistered_gate: 类别恰为28且未知类与疾病前缀残留均为0；robust至少50患者且每fold至少5，limited至少20且每fold至少2；人工标注存在性代理任一组macro-F1大于等于0.20或macro-AUC大于等于0.65即标记高可分偏差；跨类正面积重叠时禁止直接构造单张互斥28类mask；不存在穷尽性协议时缺失类别不视为真阴性
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 3ae1e9b7ec83400d52d789e1e95a574ca9a16052
+    config:
+      path: configs/research/annotation_supervision_audit.yaml
+      source: git_blob_at_commit
+      sha256: 46d7ef6b08d9728addcce1b523a9ac92a3be561d23d9fdbf965dffc22aecf5bd
+    command: python tools/34_audit_annotation_supervision.py --config configs/research/annotation_supervision_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_balanced_logistic_bias_proxy
+    hardware: Intel i5-10400; 32GB RAM; low priority; two numeric threads; GPU not used
+    runtime: 78.8071362 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_presence_proxy_oof.csv
+      sha256: 6a5db9641fa68ae309ebae839232d3fff81b44ef1571311c14b97d35e8c3d358
+    results:
+      images: 4543
+      patients: 967
+      objects: 10989
+      categories: 28
+      robust_limited_insufficient_categories: [16, 3, 9]
+      cross_category_overlapping_object_pairs: 4346
+      objects_not_fully_inside_roi: 546
+      all_macro_f1: 0.8240216651
+      all_macro_f1_ci95: [0.8010381063, 0.8466368214]
+      all_macro_auc: 0.9668220139
+      all_macro_auc_ci95: [0.9601774650, 0.9730088471]
+      anatomy_macro_f1: 0.5407178188
+      anatomy_macro_f1_ci95: [0.5116836638, 0.5696204206]
+      finding_macro_f1: 0.6087039875
+      finding_macro_f1_ci95: [0.5814563318, 0.6333588160]
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_supervision_audit.json
+      report_sha256: 27850f4067cd67faebab311c978dadae0040e896e22f319e962ced24508a573d
+      category_support_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_category_support.csv
+      category_support_sha256: e600271c60508e7d1e9c4872f286eea1c52108815dc63ccfb0434d1a062b5920
+      weights_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_presence_proxy_weights.json
+      weights_sha256: f4e8255db48256c1fe68305557b280eda96a67fa2c01ce4c73ff63331b617eb7
+      mlflow_status: completed
+    mlflow_parent_run_ids: [84bcbb8a312f472da91d942ecb037f26]
+    markdown_report: docs/project/区域病变标注监督审计结果_2026-08-02.md
+    failure_or_negative_reason: 9类患者级五折支持不足、4346对跨类重叠、人工标注存在性三组均远超高可分偏差门槛，且未建立逐图穷尽性阴性协议
+    conclusion: 28类规范化合同通过，但拒绝直接平铺互斥分割或人工标签诊断；S1关闭并进入S1a临床本体与标注协议冻结
+    next_step: 冻结临床本体、穷尽性阴性、重叠和ROI截断协议后，另行预登记窄范围多标签或实例辅助任务
+
+  - id: S1-annotation-supervision-audit-attempt2-no-weights
+    kind: formal_bias_audit_superseded
+    status: superseded_documentation_incomplete
+    research_question: 与S1正式审计相同；补齐患者bootstrap置信区间
+    preregistered_gate: 与S1预登记相同；本次运行不改变数据、fold、seed、代理模型或门槛
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 575090dc71737293b91a43b4280d0b6b5c98c06a
+    config:
+      path: configs/research/annotation_supervision_audit.yaml
+      source: git_blob_at_commit
+      sha256: 46d7ef6b08d9728addcce1b523a9ac92a3be561d23d9fdbf965dffc22aecf5bd
+    command: python tools/34_audit_annotation_supervision.py --config configs/research/annotation_supervision_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_balanced_logistic_bias_proxy
+    hardware: Intel i5-10400; 32GB RAM; low priority; two numeric threads; GPU not used
+    runtime: 80.3431415 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_presence_proxy_oof.csv
+      sha256: 6a5db9641fa68ae309ebae839232d3fff81b44ef1571311c14b97d35e8c3d358
+    results:
+      all_macro_f1: 0.8240216651
+      all_macro_f1_ci95: [0.8010381063, 0.8466368214]
+      stopped_report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_supervision_audit_attempt2_with_ci_no_weights.json
+      stopped_report_sha256: 4586b8861da4bc85778eec1f9f7d15b5dffeaee859fe48c3eb8b794e5d611711
+      weights_status: missing_due_reporting_contract_defect
+    mlflow_parent_run_ids: [e16d44ec97ba4d0b9e501ec82380b760]
+    markdown_report: docs/project/区域病变标注监督审计结果_2026-08-02.md
+    failure_or_negative_reason: 统计和CI完整，但15个折内Logistic系数未持久化，未满足正式实验权重哈希验收
+    conclusion: 结果不用于最终检查点关闭；保留MLflow、OOF和不完整报告，补齐权重产物后同合同重跑
+    next_step: 不改变研究方法，持久化每组每fold系数与截距并将哈希写入MLflow和阶段报告
+
+  - id: S1-annotation-supervision-audit-attempt1-no-ci
+    kind: formal_bias_audit_superseded
+    status: superseded_documentation_incomplete
+    research_question: 与S1正式审计相同；首次执行真实标注覆盖、几何、支持度和人工存在性代理
+    preregistered_gate: 与S1预登记相同；正式结果须含患者级置信区间、OOF、权重、运行和MLflow证据
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: a09223c311ee02cc26364bad1c78dbc012f40a0f
+    config:
+      path: configs/research/annotation_supervision_audit.yaml
+      source: git_blob_at_commit
+      sha256: 46d7ef6b08d9728addcce1b523a9ac92a3be561d23d9fdbf965dffc22aecf5bd
+    command: python tools/34_audit_annotation_supervision.py --config configs/research/annotation_supervision_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_balanced_logistic_bias_proxy
+    hardware: Intel i5-10400; 32GB RAM; low priority; two numeric threads; GPU not used
+    runtime: 56.1656158 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_presence_proxy_oof.csv
+      sha256: 6a5db9641fa68ae309ebae839232d3fff81b44ef1571311c14b97d35e8c3d358
+    results:
+      all_macro_f1: 0.8240216651
+      all_macro_auc: 0.9668220139
+      stopped_report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/annotation_supervision/annotation_supervision_audit_attempt1_no_ci.json
+      stopped_report_sha256: 7b4c3c97f84556e87c85441fdf512236e600b39fc76f64b0a698da4ce36841b0
+      confidence_interval_status: missing_due_reporting_contract_defect
+      weights_status: missing_due_reporting_contract_defect
+    mlflow_parent_run_ids: [94cd3006edeb4f529c093130ca5fa20a]
+    markdown_report: docs/project/区域病变标注监督审计结果_2026-08-02.md
+    failure_or_negative_reason: 主要统计和OOF完成，但正式报告缺患者bootstrap CI且未持久化折内权重，不满足持续文档化验收
+    conclusion: 结果不用于最终检查点关闭；保留MLflow、OOF和不完整报告，补齐CI后同合同重跑
+    next_step: 不改变研究数据或门槛，补齐患者分层bootstrap CI和权重产物
+
   - id: S1-annotation-supervision-audit-preregistration
     kind: formal_bias_audit_preregistration
-    status: preregistered_formal_pending
+    status: completed_formal_linked
     research_question: 规范化28类多边形标注是否在覆盖、几何、患者级五折支持度、类别重叠和疾病捷径方面足以支持后续病变定位或诊断辅助监督
     preregistered_gate: 类别恰为28且未知类与疾病前缀残留均为0；robust至少50患者且每fold至少5，limited至少20且每fold至少2；人工标注存在性代理任一组macro-F1大于等于0.20或macro-AUC大于等于0.65即标记高可分偏差；跨类正面积重叠时禁止直接构造单张互斥28类mask；不存在穷尽性协议时缺失类别不视为真阴性
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -32,12 +146,12 @@ experiments:
       real_annotation_results_seen_before_preregistration: false
       annotation_roles: provisional_pending_clinical_review
       absence_as_true_negative: not_established_without_exhaustive_protocol
-      mlflow_status: pending_formal_run
-    mlflow_parent_run_ids: [pending_formal_run]
+      mlflow_status: completed_in_linked_formal_record
+    mlflow_parent_run_ids: [84bcbb8a312f472da91d942ecb037f26]
     markdown_report: docs/project/区域病变标注监督审计预登记_2026-08-02.md
     failure_or_negative_reason: not_applicable_results_unknown
-    conclusion: 方法、配置、偏差阈值和停止规则已在真实结果未知时冻结；尚未形成监督可用性或模型选择结论
-    next_step: 文档与产物一致性审计通过并提交后，正式运行一次并生成独立阶段报告与方法ADR
+    conclusion: 方法、配置、偏差阈值和停止规则已在真实结果未知时冻结；正式结果已在S1-annotation-supervision-audit-formal登记
+    next_step: 依据正式结果和ADR-010进入S1a临床本体与标注协议冻结
 
   - id: E3-preregistration
     kind: formal_study_preregistration

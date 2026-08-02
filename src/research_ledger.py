@@ -40,6 +40,11 @@ FORMAL_MODEL_REQUIRED = {
     "fold_status",
 }
 FORMAL_MODEL_KINDS = {"formal_model", "formal_model_in_progress"}
+OOF_REQUIRED_KINDS = {
+    *FORMAL_MODEL_KINDS,
+    "formal_bias_audit",
+    "formal_bias_audit_superseded",
+}
 FORBIDDEN_PATH_FRAGMENTS = (
     "workspace/data/raw/",
     "workspace\\data\\raw\\",
@@ -144,10 +149,10 @@ def validate_experiment_record(
             if observed != str(config["sha256"]):
                 raise ValueError(f"Config SHA-256 mismatch for {record['id']}")
 
-    if record.get("kind") in FORMAL_MODEL_KINDS:
+    if record.get("kind") in OOF_REQUIRED_KINDS:
         oof = record["oof"]
         if not isinstance(oof, Mapping) or not {"path", "sha256"} <= set(oof):
-            raise ValueError("Formal model oof must contain path and sha256")
+            raise ValueError("Formal experiment oof must contain path and sha256")
         _validate_hash(str(oof["sha256"]), "oof.sha256")
         if verify_artifacts:
             oof_path = _resolve_project_file(project_root, str(oof["path"]))
