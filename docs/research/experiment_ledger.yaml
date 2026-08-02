@@ -10,7 +10,7 @@ mlflow:
 experiments:
   - id: C0-C4-preregistration
     kind: formal_study_preregistration
-    status: preregistered_not_run
+    status: executed_completed_linked
     research_question: 人口学、化验缺失模式和允许的临床数值分别能在异常五分类中提供多少信息，显式缺失指示器是否主要放大工作流偏差
     preregistered_gate: C2比C0高至少0.05即确认实质缺失偏差；C3须比C1高至少0.05、至少4/5折方向为正且五类F1均大于0.10；C4比C3高至少0.02或配对CI完全大于0则标记工作流依赖；C0/C1/C2/C4均不晋级
     data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
@@ -30,11 +30,238 @@ experiments:
       clinical_table_sha256: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
       input_audit_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/clinical_input_audit.json
       input_audit_sha256: 484aee2605af312030666c766bec02cd13b77426c82dbdbb6b58f511d6f4c9c2
-    mlflow_parent_run_ids: []
+    mlflow_parent_run_ids: [8f252bf097c7493a8363f44c8094745a, 9952cd2af5f940fbae1e91e61afe5ae1, 347d1e8227a8402ba63580b4f3bbb704, e128c5d3609e4ed7b36d75ca8324a1e8, 38aea157f18d42d4b1eba9fca9f1d6e4]
     markdown_report: docs/project/C0_C4临床输入决策与实验预登记_2026-08-02.md
-    failure_or_negative_reason: none_not_run
-    conclusion: 输入合同、数据指纹和五个实验门槛已在结果未知时冻结
-    next_step: 文档与产物审计、提交预登记后运行C0-C4固定五折
+    failure_or_negative_reason: C2和C4分别确认缺失模式偏差及工作流依赖；均按预登记不晋级
+    conclusion: C0-C4已按预登记完成；C3通过临床基线门槛，C2/C4作为偏差和敏感性结果保留
+    next_step: 按ADR-007冻结C3临床输入；F0-F2继续等待合格图像候选
+
+  - id: C0-fivefold-formal
+    kind: formal_model
+    status: completed_reference
+    research_question: 异常五分类在不读取任何特征时的outer-train类别频率基线是多少
+    preregistered_gate: 仅作为无信息参照，不进入候选
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: c7d739072b92044d5fa845c2e108cc642343aa6b
+    config:
+      path: configs/research/c0_c4_clinical_logreg.yaml
+      source: git_blob_at_commit
+      sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_class_frequency
+    hardware: Intel64 Family 6 Model 165; 6 cores/12 threads; 31.9GB RAM; max 2 threads; GPU unused
+    runtime_hours_by_fold: [0.0000503628, 0.0000470855, 0.0000462255, 0.0000441928, 0.0000412536]
+    peak_allocated_gpu_gb_by_fold: [0, 0, 0, 0, 0]
+    fold_status: [COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C0_oof.csv
+      sha256: 5856f9ed5d0c3dc9accc5d65e36882d3241c567a360f20a71a49f971e910c17d
+    results:
+      macro_f1: 0.1015564202
+      macro_f1_ci95: [0.1015564202, 0.1015564202]
+      accuracy: 0.3402868318
+      macro_auc: 0.4954293348
+      multiclass_brier: 0.7559503758
+      ece: 0.0000005092
+      fold_macro_f1: [0.1024154589, 0.1009708738, 0.1014634146, 0.1014634146, 0.1014634146]
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_summary.json
+      summary_sha256: b85ea9943db3841a839c4bae93fd2caeab7e2f8ea26efb660511d0d508d57403
+      combined_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_C4_evaluation.json
+      combined_evaluation_sha256: 13903be494735541d09783fcfa71b077c336d3251587a04671eed3236729ed8c
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C0/fold_0_class_frequency.json, sha256: e578d55e74c02c6e255ddcadce5c081558edc7dfd071529650f8c24ab863f9f2}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C0/fold_1_class_frequency.json, sha256: b8ad78cfd436773ecce0e5cb45aef3fa3000a35bbb0c662aa76bff9250ea2d07}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C0/fold_2_class_frequency.json, sha256: d26deb4e2a79fb35b84d6d946a50240621693423dad6fbc4dceb3cc3c6a335ea}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C0/fold_3_class_frequency.json, sha256: b4f9ecf593e67cb37c8feea797e780acb859b1c3cf21a76d05f0713d2dd9c809}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C0/fold_4_class_frequency.json, sha256: 0cf80225bb97eab344fd518ae54e11da5cf65ad40180760954c2781b5bfc8e0e}
+    mlflow_parent_run_ids: [8f252bf097c7493a8363f44c8094745a]
+    mlflow_fold_run_ids: [d3a5a218bb9448009b4550b314c121aa, d122acbf018b4d4a8b8e6cd58bd7922d, 5d0604d071594703bfabff9553f09191, 0670a1c9d3964eba82683801ce027aaf, 5f766da27d4a46618993237312e9e9ec]
+    markdown_report: docs/project/C0_C4临床五折基线与缺失偏差结果_2026-08-02.md
+    failure_or_negative_reason: 四个非多数类别灵敏度和F1为0；符合无信息参照预期
+    conclusion: 仅作为C1-C4配对参照
+    next_step: 与C1/C2比较人口学与缺失模式偏差
+
+  - id: C1-fivefold-formal
+    kind: formal_model
+    status: completed_bias_baseline
+    research_question: 仅年龄和性别能在当前异常五分类队列中提供多少类别信息
+    preregistered_gate: 描述人口学偏差，不作为临床候选
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: c7d739072b92044d5fa845c2e108cc642343aa6b
+    config: {path: configs/research/c0_c4_clinical_logreg.yaml, source: git_blob_at_commit, sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71}
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_logistic_regression
+    hardware: Intel64 Family 6 Model 165; 6 cores/12 threads; 31.9GB RAM; max 2 threads; GPU unused
+    runtime_hours_by_fold: [0.0000483499, 0.0000452679, 0.0000491411, 0.0000491452, 0.0000465026]
+    peak_allocated_gpu_gb_by_fold: [0, 0, 0, 0, 0]
+    fold_status: [COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED]
+    oof: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C1_oof.csv, sha256: 0e4b63f6c8cb998f5834eb17764abdffd585719417752111c36117797ca3df76}
+    results:
+      macro_f1: 0.4128862866
+      macro_f1_ci95: [0.3839010920, 0.4395370737]
+      accuracy: 0.5006518905
+      macro_auc: 0.7724999089
+      multiclass_brier: 0.6471881011
+      ece: 0.0871093569
+      paired_delta_vs_C0: 0.3113298663
+      paired_delta_vs_C0_ci95: [0.2823446717, 0.3379806534]
+      fold_macro_f1: [0.3956759659, 0.3361261137, 0.4510858495, 0.4340616246, 0.4495933851]
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C1_summary.json
+      summary_sha256: 4b2cc27af25ba0d6984fab0327df845feadb609535152a9370bba2a46b808a4a
+      combined_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_C4_evaluation.json
+      combined_evaluation_sha256: 13903be494735541d09783fcfa71b077c336d3251587a04671eed3236729ed8c
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C1/fold_0_model.joblib, sha256: 3b245102754152d60f7e9bc6684966db76e5016d2717a67426f3d7d70cb8b577}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C1/fold_1_model.joblib, sha256: 14e4680df2ee886e4fa4c851fb24f45a6d1214575894909812ea3ef365ef4de0}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C1/fold_2_model.joblib, sha256: 50c1730f5c157b6c47df43858edf37224418d774d003c036deb9c4ddd29138b1}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C1/fold_3_model.joblib, sha256: f3e579fd808809093ed1ca2403c2001fddbdac37c4e643cb1f6bd36b86dce8d2}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C1/fold_4_model.joblib, sha256: 4b861881c7650e08749725fe13cb44cae44e71947f2f0dc3b84d7411f3f84cef}
+    mlflow_parent_run_ids: [9952cd2af5f940fbae1e91e61afe5ae1]
+    mlflow_fold_run_ids: [c1c459444f1d499b90e7eafcd73d0d4c, 1aca7080b7894f1a9677deddc87c70af, 36ce054f8f8945019122d82d7bf1903c, 1fb1a339c4e74f1da4850a8cb13571cf, 8f3bfac25d03497d98e9c4cd908c0680]
+    markdown_report: docs/project/C0_C4临床五折基线与缺失偏差结果_2026-08-02.md
+    failure_or_negative_reason: SPA F1和灵敏度为0；痛风F1 0.6297受全男性队列构成影响
+    conclusion: 人口学代理信号很强，仅作偏差参照
+    next_step: C3必须在同折明显超过C1且修复最弱类别
+
+  - id: C2-fivefold-formal
+    kind: formal_model
+    status: completed_bias_confirmed
+    research_question: 只读取六项化验是否缺失能在当前异常五分类中达到什么水平
+    preregistered_gate: 比C0 macro-F1高至少0.05即确认实质工作流偏差；无论分数多高均不晋级
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: c7d739072b92044d5fa845c2e108cc642343aa6b
+    config: {path: configs/research/c0_c4_clinical_logreg.yaml, source: git_blob_at_commit, sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71}
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_logistic_regression
+    hardware: Intel64 Family 6 Model 165; 6 cores/12 threads; 31.9GB RAM; max 2 threads; GPU unused
+    runtime_hours_by_fold: [0.0000503627, 0.0000501663, 0.0000502377, 0.0000495688, 0.0000506126]
+    peak_allocated_gpu_gb_by_fold: [0, 0, 0, 0, 0]
+    fold_status: [COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED]
+    oof: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C2_oof.csv, sha256: a0f9ff10edb6db5ec3b56aa52b77feafe40f93372b206c1d6fecfa1bddd6de6b}
+    results:
+      macro_f1: 0.5145940777
+      macro_f1_ci95: [0.4812828247, 0.5492900874]
+      accuracy: 0.5358539765
+      macro_auc: 0.7850768155
+      multiclass_brier: 0.6269706282
+      ece: 0.0515117963
+      paired_delta_vs_C0: 0.4130376575
+      paired_delta_vs_C0_ci95: [0.3797264045, 0.4477336672]
+      fold_macro_f1: [0.4999336586, 0.5104827289, 0.5030668102, 0.5375777557, 0.5200991624]
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C2_summary.json
+      summary_sha256: 89fe57a7dc90a0761157717692634b13e22ed8846ff3ac1de6a056c074a5871d
+      combined_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_C4_evaluation.json
+      combined_evaluation_sha256: 13903be494735541d09783fcfa71b077c336d3251587a04671eed3236729ed8c
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C2/fold_0_model.joblib, sha256: f2b3363fa075cf9d6982309d7963a811a82f9f0dbe824e5d6dafecfa7827c7a8}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C2/fold_1_model.joblib, sha256: ce1bca69a353d0a89bb09dd7704dd0ce61fd021f8de24726130d55b7c6b4a93f}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C2/fold_2_model.joblib, sha256: fa5c2e76bc2d0a8fc1cb7e109c752945cc209f624deedfce9e6d8e83ce003620}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C2/fold_3_model.joblib, sha256: afb628bc427ca270648f2690532052058ef87b5811059bd0f315646e2892267a}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C2/fold_4_model.joblib, sha256: f0a95980a567f4ab93ff0cd508d1e57143eeb75ecafd95e70151c24e5cc53f73}
+    mlflow_parent_run_ids: [347d1e8227a8402ba63580b4f3bbb704]
+    mlflow_fold_run_ids: [ae5fdd90180f4c5495226d69529e68fb, 0feb8c6dc1634303897b22f463425895, cceec419fffb448ba6b75999500b16d9, 5a0aa5f3e79446c693fe33d6bd2269b2, 94c7e427c7534bee8e98e332541b82bc]
+    markdown_report: docs/project/C0_C4临床五折基线与缺失偏差结果_2026-08-02.md
+    failure_or_negative_reason: 仅缺失模式即显著高于无信息基线，证明开检查流程泄漏；该阳性分数不代表医学诊断能力
+    conclusion: 工作流偏差门槛明确触发，永久作为偏差审计
+    next_step: C3主结果排除missing mask；C4只作敏感性上限
+
+  - id: C3-fivefold-formal
+    kind: formal_model
+    status: completed_gate_passed
+    research_question: 八个允许临床数值在排除显式missing mask后能否形成有用且稳定的异常五分类基线
+    preregistered_gate: 比C1 macro-F1高至少0.05，至少4/5折为正且五类F1均大于0.10
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: c7d739072b92044d5fa845c2e108cc642343aa6b
+    config: {path: configs/research/c0_c4_clinical_logreg.yaml, source: git_blob_at_commit, sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71}
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_logistic_regression
+    hardware: Intel64 Family 6 Model 165; 6 cores/12 threads; 31.9GB RAM; max 2 threads; GPU unused
+    runtime_hours_by_fold: [0.0000507194, 0.0000514311, 0.0000497297, 0.0000511568, 0.0000500442]
+    peak_allocated_gpu_gb_by_fold: [0, 0, 0, 0, 0]
+    fold_status: [COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED]
+    oof: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C3_oof.csv, sha256: 9bcdedef62b6179a8de0b5118d13a367184cbdc0f0b75a7f23d1bd4a14eb5d8c}
+    results:
+      macro_f1: 0.7185249091
+      macro_f1_ci95: [0.6836343836, 0.7517869520]
+      accuracy: 0.7757496741
+      macro_auc: 0.9273290915
+      multiclass_brier: 0.3397590204
+      ece: 0.0475285710
+      paired_delta_vs_C1: 0.3056386225
+      paired_delta_vs_C1_ci95: [0.2696580596, 0.3416589130]
+      folds_direction_better_than_C1: 5
+      worst_class_f1: 0.4719101124
+      worst_class_name: 脊柱关节炎
+      fold_macro_f1: [0.6929421254, 0.7122400716, 0.7269125673, 0.7394808170, 0.7161874012]
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C3_summary.json
+      summary_sha256: 9415eb8ed66ab7e3ec57571ed148bdc19e3fced71bb7d78264fde9c03f3af35d
+      combined_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_C4_evaluation.json
+      combined_evaluation_sha256: 13903be494735541d09783fcfa71b077c336d3251587a04671eed3236729ed8c
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_0_model.joblib, sha256: 112413a2fc26eb9fe6d7ab9f1cbee2c8c8d95a25a9ebee99510edb719fd297ad}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_1_model.joblib, sha256: 1ee059f94313c9c6e726be44a409bead327ec1ff0997110360b134136a0fd5bc}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_2_model.joblib, sha256: f853f32bdea97c5db844dae475cca06925ba6e941b1981344414837dab8628f1}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_3_model.joblib, sha256: e53ba10fea05b7eee4056f67d2ca89955f95a285f5f61dbd8678216e72af3f78}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_4_model.joblib, sha256: e5c86d1bb69d926526af79d0e34a5b5b7ebfd9a0f78ca51459f37715f0bc649d}
+    mlflow_parent_run_ids: [e128c5d3609e4ed7b36d75ca8324a1e8]
+    mlflow_fold_run_ids: [0391177a48f14709b1cb3f65f7314ca4, 3e33948559304842a21b1ccf88c10908, 7b60a91b31f74a798066b0550d75ac5b, 3dd8394cffdb4948b74c8b6e3c47dc6f, 9ebf1e5fc84549dda581803faa84f1e2]
+    markdown_report: docs/project/C0_C4临床五折基线与缺失偏差结果_2026-08-02.md
+    failure_or_negative_reason: SPA灵敏度0.4468和F1 0.4719仍为最弱类别；内部化验本身参与真实诊断流程，泛化尚未验证
+    conclusion: 全部预设有用性门槛通过，冻结为异常五分类临床单模态参考
+    next_step: 按ADR-007不增加MLP/树模型；等待合格图像候选后用于无missing mask融合
+
+  - id: C4-fivefold-formal
+    kind: formal_model
+    status: completed_sensitivity_not_candidate
+    research_question: 在C3上显式加入六项缺失指示器会把内部异常五分类性能抬高多少
+    preregistered_gate: 比C3高至少0.02或配对CI完全大于0即标记工作流依赖；无论分数多高均不晋级
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: c7d739072b92044d5fa845c2e108cc642343aa6b
+    config: {path: configs/research/c0_c4_clinical_logreg.yaml, source: git_blob_at_commit, sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71}
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_logistic_regression
+    hardware: Intel64 Family 6 Model 165; 6 cores/12 threads; 31.9GB RAM; max 2 threads; GPU unused
+    runtime_hours_by_fold: [0.0000551221, 0.0000540315, 0.0000521672, 0.0000516291, 0.0000498450]
+    peak_allocated_gpu_gb_by_fold: [0, 0, 0, 0, 0]
+    fold_status: [COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED]
+    oof: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C4_oof.csv, sha256: 1e71dca5b5e223610d0e1f1e4b63bb792605e667239b4fdb0b9d60981f30aff2}
+    results:
+      macro_f1: 0.8050049085
+      macro_f1_ci95: [0.7730078425, 0.8355303249]
+      accuracy: 0.8292046936
+      macro_auc: 0.9635156794
+      multiclass_brier: 0.2526866994
+      ece: 0.0250937943
+      paired_delta_vs_C3: 0.0864799994
+      paired_delta_vs_C3_ci95: [0.0566044999, 0.1188783744]
+      workflow_dependency_gate_triggered: true
+      fold_macro_f1: [0.7758677061, 0.8063492063, 0.8398973123, 0.8399484517, 0.7606092550]
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C4_summary.json
+      summary_sha256: d6231f3ac94a1b3680ef9a44f41bebdd210914af713416eb90f846b929af05b2
+      combined_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/C0_C4_evaluation.json
+      combined_evaluation_sha256: 13903be494735541d09783fcfa71b077c336d3251587a04671eed3236729ed8c
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C4/fold_0_model.joblib, sha256: f8010a9582f82ac323859be272b58fabf4a65c8341826348f262a3b33c0a6c7f}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C4/fold_1_model.joblib, sha256: 2ac3d4798ef4d36e1c95bb6f48bf8145863d0ac62b575b131cc4b22cb076cadc}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C4/fold_2_model.joblib, sha256: 99fc3499bc77f1cf05da15b8578cf56664389ca9266cdcfbebdab547ee50fc50}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C4/fold_3_model.joblib, sha256: efd2f29e99be3fde7c8784a3b8908916b2703c6049460bb5e826787e3bfd368f}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C4/fold_4_model.joblib, sha256: 837850c150237f6e3b908d4e96a8f3ae341143e64fbf0ede511277685cd085b1}
+    mlflow_parent_run_ids: [38aea157f18d42d4b1eba9fca9f1d6e4]
+    mlflow_fold_run_ids: [04d5ebf540d54b1397679c9f3b4a55dd, c26209ab8704449fae58d3c5adace5dc, 138fce15ca6f47169d1aaf9bac1abcad, 5726c810ac1d46569f3bcea8f7c120a9, 490a570acb174dd5b49f832b3e349198]
+    markdown_report: docs/project/C0_C4临床五折基线与缺失偏差结果_2026-08-02.md
+    failure_or_negative_reason: 比C3显著提高0.0865且CI完全大于0，触发预设工作流依赖判据；高分不得晋级
+    conclusion: 只作为缺失模式敏感性上限，核心临床输入仍为C3
+    next_step: 最终报告同时展示C2/C4偏差信号；融合不得显式输入missing mask
 
   - id: E0-fivefold-formal
     kind: formal_model

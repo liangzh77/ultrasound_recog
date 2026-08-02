@@ -175,6 +175,13 @@ def validate_experiment_record(
                 raise ValueError(
                     f"Result artifact mismatch for {record['id']}: {path_key}"
                 )
+        for item in result.get("model_artifacts", []):
+            if not isinstance(item, Mapping) or not {"fold", "path", "sha256"} <= set(item):
+                raise ValueError("model_artifacts entries require fold, path, and sha256")
+            _validate_hash(str(item["sha256"]), "model_artifacts.sha256")
+            model_path = _resolve_project_file(project_root, str(item["path"]))
+            if not model_path.is_file() or sha256_file(model_path) != str(item["sha256"]):
+                raise ValueError(f"Model artifact mismatch for {record['id']}")
 
 
 def validate_research_ledger(
