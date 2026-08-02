@@ -504,12 +504,12 @@ experiments:
 
   - id: E2R-fivefold-formal
     kind: formal_model_in_progress
-    status: in_progress_fold_0_of_5_complete
+    status: in_progress_folds_0_to_1_of_5_complete
     research_question: 固定系数0.05的归一化注意力KL正则能否消除E2系统性塌缩并保留患者级分类收益
     preregistered_gate: pooled塌缩率不超过0.50；macro-F1不低于0.3463且比E1高至少0.01；至少3/5折高于E1；每类F1较E2下降不超过0.05；ECE不高于0.4519且Brier不高于1.0291
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
     git_commit: 0a7205b53cb787432193dd0da9efe2be6dfb093e
-    git_commits_by_attempt: [204f184]
+    git_commits_by_attempt: [204f184, cbcdc16]
     config:
       path: configs/research/e2r_roi_gated_attention_entropy_b2.yaml
       source: git_blob_at_commit
@@ -519,13 +519,17 @@ experiments:
     seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
     hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
-    runtime_hours_by_fold: [0.3979045947]
-    peak_allocated_gpu_gb_by_fold: [1.2578058243]
-    peak_reserved_gpu_gb_by_fold: [1.3593750000]
-    fold_status: [EARLY_STOPPED]
+    runtime_hours_by_fold: [0.3979045947, 0.4735205033]
+    peak_allocated_gpu_gb_by_fold: [1.2578058243, 1.2568864822]
+    peak_reserved_gpu_gb_by_fold: [1.3593750000, 1.4023437500]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED]
     oof:
       path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_fold0.csv
       sha256: 8f4f94a645f604e06db6838c7550e3f6990128291b222b62fa7044aa065f5447
+    additional_fold_oof:
+      - fold: 1
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_fold1.csv
+        sha256: c95180eea39888062b2188210ab0291f13e9c9cbb6bbbb0990afa77e32710c51
     results:
       attention_kl_weight: 0.05
       e2_reference_macro_f1: 0.3663369214
@@ -549,10 +553,27 @@ experiments:
       fold_0_attention_sha256: 0e99c64a1d37c47070525a6f989c1d803327149761ed4013a0223afcf826c88a
       fold_0_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2R/fold_0/best_formal.pt
       fold_0_weight_sha256: 07ec9b13f9180bb608b2f9e420be6208428d5cb42221cc6532fad356e03d8581
+      fold_1_patients: 194
+      fold_1_images: 935
+      fold_1_macro_f1: 0.3278749797
+      fold_1_delta_vs_E1_macro_f1: 0.1522602074
+      fold_1_delta_vs_E2_macro_f1: -0.0191169465
+      fold_1_accuracy: 0.3350515464
+      fold_1_macro_auc: 0.6686173649
+      fold_1_multiclass_brier: 1.0902319308
+      fold_1_ece: 0.4870253127
+      fold_1_attention_multi_image_collapse_rate: 0.6315789474
+      fold_1_attention_gate_passed: false
+      fold_1_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E2R-fold1-seed20260725-formal_summary.json
+      fold_1_summary_sha256: 8a252516b5389ad054f452396ad93d115bb8407f64dcc9b4e173e137d3b300e0
+      fold_1_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/E2R_fold1.csv
+      fold_1_attention_sha256: bc85d37ea48a1864d6baf456e773d4f86bb218ac3bedcebbf1568d7d4f0aae47
+      fold_1_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2R/fold_1/best_formal.pt
+      fold_1_weight_sha256: 5e6ea8389afd65151091212ec7f7bbf16399a130d079b2df6bc7f1e9d428f40a
       merged_ci: not_available_until_fivefold_complete
-    mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc]
-    mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c]
+    mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc, b7b024e4636f4b05b88749df17de9352]
+    mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c, 86d69d5eb3ad4e6992add48af394956b]
     markdown_report: docs/decisions/ADR-005-E2性能门槛通过但注意力塌缩后启动单次熵正则补救.md
-    failure_or_negative_reason: none_in_fold_0; second_regularization_strength_prohibited
-    conclusion: fold 0性能高于E1/E2同折且注意力塌缩率0.2128通过；单折禁止总体结论
-    next_step: 提交fold 0登记后运行正式fold 1
+    failure_or_negative_reason: fold 1注意力塌缩率0.6316、Brier 1.0902、ECE 0.4870均超过预设上限；第二正则强度仍被禁止
+    conclusion: 前两折性能均高于E1；fold 0注意力通过、fold 1失败，不能提前停止或晋级
+    next_step: 提交fold 1登记后运行正式fold 2
