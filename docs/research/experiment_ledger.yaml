@@ -574,6 +574,6 @@ experiments:
     mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc, b7b024e4636f4b05b88749df17de9352]
     mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c, 86d69d5eb3ad4e6992add48af394956b]
     markdown_report: docs/decisions/ADR-005-E2性能门槛通过但注意力塌缩后启动单次熵正则补救.md
-    failure_or_negative_reason: fold 1注意力塌缩率0.6316、Brier 1.0902、ECE 0.4870均超过预设上限；第二正则强度仍被禁止
-    conclusion: 前两折性能均高于E1；fold 0注意力通过、fold 1失败，不能提前停止或晋级
-    next_step: 提交fold 1登记后运行正式fold 2
+    failure_or_negative_reason: fold 1注意力塌缩率0.6316、Brier 1.0902、ECE 0.4870均超过预设上限；fold 2首次启动因可用内存6.8GB低于8GB被安全拒绝，未进入训练或MLflow；第二正则强度仍被禁止
+    conclusion: 前两折性能均高于E1；fold 0注意力通过、fold 1失败；fold 2等待资源恢复后按原配置重试
+    next_step: 可用内存恢复到至少8GB后运行正式fold 2；不得降低资源门槛或关闭用户程序
