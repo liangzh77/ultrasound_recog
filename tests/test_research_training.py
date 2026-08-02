@@ -15,6 +15,7 @@ from src.research_mil import GatedAttentionMILClassifier
 from src.research_training import (
     EarlyStopping,
     make_patient_balanced_sampler,
+    previous_elapsed_hours,
     run_patient_epoch,
     warmup_cosine_multiplier,
 )
@@ -195,6 +196,17 @@ def test_early_stopping_tracks_best_epoch_and_patience():
     assert stopping.update(epoch=2, score=0.3) == (False, True)
     assert stopping.best_epoch == 0
     assert stopping.best_score == 0.4
+
+
+def test_resume_timing_uses_accumulated_total_and_supports_legacy_history():
+    history = [
+        {"elapsed_hours": 0.1},
+        {"elapsed_hours": 0.2},
+        {"elapsed_hours": 0.05, "elapsed_hours_total": 0.25},
+    ]
+
+    assert previous_elapsed_hours(history) == 0.25
+    assert previous_elapsed_hours([]) == 0.0
 
 
 def test_short_pilot_scheduler_does_not_zero_lr_before_final_epoch():

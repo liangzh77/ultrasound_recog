@@ -24,6 +24,19 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def previous_elapsed_hours(history: list[dict[str, Any]]) -> float:
+    """Return accumulated elapsed time before a resumed training attempt."""
+    if not history:
+        return 0.0
+    values = [
+        float(row.get("elapsed_hours_total", row["elapsed_hours"]))
+        for row in history
+    ]
+    if any(value < 0 for value in values):
+        raise ValueError("Elapsed training time cannot be negative")
+    return max(values)
+
+
 def warmup_cosine_multiplier(epoch: int, total_epochs: int, warmup_epochs: int) -> float:
     if total_epochs < 1 or not 0 <= warmup_epochs < total_epochs:
         raise ValueError("Warmup must be non-negative and shorter than training")

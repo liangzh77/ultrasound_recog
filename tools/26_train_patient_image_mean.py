@@ -275,6 +275,7 @@ def main() -> int:
     from src.research_training import (
         EarlyStopping,
         make_patient_balanced_sampler,
+        previous_elapsed_hours,
         run_patient_epoch,
         seed_everything,
     )
@@ -449,6 +450,7 @@ def main() -> int:
     history_path = log_dir / f"fold_{args.fold}_{mode_suffix}_history.json"
     history = []
     first_epoch = 0
+    prior_elapsed_hours = 0.0
     if args.resume:
         if not resume_path.is_file():
             raise FileNotFoundError(resume_path)
@@ -460,6 +462,10 @@ def main() -> int:
         stopping = EarlyStopping(**state["early_stopping"])
         history = state["history"]
         first_epoch = int(state["epoch"]) + 1
+        prior_elapsed_hours = previous_elapsed_hours(history)
+    run_contract["resume_requested"] = bool(args.resume)
+    run_contract["resume_from_epoch"] = first_epoch if args.resume else None
+    run_contract["prior_elapsed_hours"] = prior_elapsed_hours
 
     tracker = LocalResearchTracker(
         PATIENT_MULTIMODAL_EXPERIMENT_DIR / "tracking",
@@ -480,6 +486,7 @@ def main() -> int:
             "git_revision": revision,
             "git_dirty": dirty,
             "pilot": args.pilot,
+            "resume_requested": bool(args.resume),
         },
     ) as parent_run:
         run_contract["mlflow_parent_run_id"] = parent_run.info.run_id
@@ -528,7 +535,8 @@ def main() -> int:
                     validation_metrics["macro_f1"],
                 )
                 scheduler.step()
-                elapsed_hours = (time.monotonic() - started) / 3600
+                attempt_elapsed_hours = (time.monotonic() - started) / 3600
+                elapsed_hours = prior_elapsed_hours + attempt_elapsed_hours
                 snapshot, _ = collect_resource_snapshot(ROOT)
                 snapshot = replace(snapshot, elapsed_hours=elapsed_hours)
                 peak_allocated_gpu_gb = torch.cuda.max_memory_allocated() / (1024**3)
@@ -541,6 +549,8 @@ def main() -> int:
                     "encoder_lr": encoder_lr_used,
                     "head_lr": head_lr_used,
                     "elapsed_hours": elapsed_hours,
+                    "attempt_elapsed_hours": attempt_elapsed_hours,
+                    "elapsed_hours_total": elapsed_hours,
                     "peak_gpu_memory_allocated_gb": peak_allocated_gpu_gb,
                     "peak_gpu_memory_reserved_gb": peak_reserved_gpu_gb,
                     "resource": asdict(snapshot),
@@ -619,7 +629,15 @@ def main() -> int:
                     "epochs_completed": len(history),
                     "best_validation_macro_f1": stopping.best_score,
                     "best_epoch": stopping.best_epoch,
-                    "elapsed_hours": (time.monotonic() - started) / 3600,
+                    "elapsed_hours": (
+                        prior_elapsed_hours
+                        + (time.monotonic() - started) / 3600
+                    ),
+                    "attempt_elapsed_hours": (time.monotonic() - started) / 3600,
+                    "elapsed_hours_total": (
+                        prior_elapsed_hours
+                        + (time.monotonic() - started) / 3600
+                    ),
                     "peak_gpu_memory_allocated_gb": (
                         torch.cuda.max_memory_allocated() / (1024**3)
                     ),
@@ -665,7 +683,15 @@ def main() -> int:
                     "prediction_file": prediction_path.name,
                     "prediction_path": prediction_relative,
                     "prediction_sha256": sha256_file(prediction_path),
-                    "elapsed_hours": (time.monotonic() - started) / 3600,
+                    "elapsed_hours": (
+                        prior_elapsed_hours
+                        + (time.monotonic() - started) / 3600
+                    ),
+                    "attempt_elapsed_hours": (time.monotonic() - started) / 3600,
+                    "elapsed_hours_total": (
+                        prior_elapsed_hours
+                        + (time.monotonic() - started) / 3600
+                    ),
                     "peak_gpu_memory_allocated_gb": (
                         torch.cuda.max_memory_allocated() / (1024**3)
                     ),
