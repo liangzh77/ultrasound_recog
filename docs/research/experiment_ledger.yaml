@@ -73,8 +73,8 @@ experiments:
     next_step: 提交pilot登记后运行E3正式fold 0
 
   - id: E3-fivefold-formal
-    kind: formal_model_in_progress
-    status: folds_complete_pending_merged_oof
+    kind: formal_model
+    status: completed_gate_failed
     research_question: 无可学习attention的患者级embedding等权平均能否保留E2相对E1的性能收益并满足类别安全与校准门槛
     preregistered_gate: OOF macro-F1不低于0.3463、相对E1至少+0.01且配对CI下界大于0、至少4/5折高于E1、任一类别F1较E2下降不超过0.05、ECE不高于0.4519且Brier不高于1.0291；全部五折完成后统一判断
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -95,9 +95,12 @@ experiments:
     peak_reserved_gpu_gb_by_fold: [1.3496093750, 1.3574218750, 1.3574218750, 1.3652343750, 1.3515625000]
     fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
     oof:
-      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_fold0.csv
-      sha256: bad34efc5afd7ee59cf1c541e4ae6d8523edea620a26e1986baa6495a5e54eb0
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_oof.csv
+      sha256: 19642d928b8b90957705f02406d6dc2ecb9ee5bfb3dbd239d612b0851464455b
     additional_fold_oof:
+      - fold: 0
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_fold0.csv
+        sha256: bad34efc5afd7ee59cf1c541e4ae6d8523edea620a26e1986baa6495a5e54eb0
       - fold: 1
         path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_fold1.csv
         sha256: a8aafaf0abbf06385451aac58bb20fb7d622242ccb86b23fa073d2b7230e18c7
@@ -183,13 +186,39 @@ experiments:
       fold_4_weight_sha256: 89ebdd8fb8a3bab38c13d41f5614512099ec043c329446f36c86733806685c17
       fold_4_injury_sensitivity: 0.0
       folds_direction_better_than_E1: 4
+      macro_f1: 0.3009603960
+      macro_f1_ci95: [0.2692671900, 0.3330939723]
+      accuracy: 0.3257497415
+      balanced_accuracy: 0.2919254061
+      top2_accuracy: 0.5739400207
+      macro_auc: 0.6609130372
+      multiclass_brier: 0.8025511142
+      ece: 0.1245045733
+      paired_delta_vs_E1_macro_f1: 0.0854434811
+      paired_delta_vs_E1_ci95: [0.0520956033, 0.1224951970]
+      paired_delta_vs_E2_macro_f1: -0.0653765254
+      paired_delta_vs_E2_ci95: [-0.1077105292, -0.0232194818]
+      worst_class_f1_delta_vs_E2: -0.2267441860
+      worst_class_name: 损伤
+      normal_f1_delta_vs_E2: -0.0590653509
+      gout_f1_delta_vs_E2: -0.1709849541
+      injury_f1_delta_vs_E2: -0.2267441860
+      overall_performance_gate_passed: false
+      paired_E1_gate_passed: true
+      fold_direction_gate_passed: true
+      class_safety_gate_passed: false
+      calibration_gate_passed: true
+      evaluation_vs_E1_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_vs_E1_oof_evaluation.json
+      evaluation_vs_E1_sha256: 777e5d7bf1fb3da2e2554570ed6c25e5208f07dddcdbd210d60100bec051fe51
+      evaluation_vs_E2_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E3_vs_E2_oof_evaluation.json
+      evaluation_vs_E2_sha256: d9406ae2fe1affa87cf9e468b3a787177a58abd9e72de83c8130507a88bb0580
       outer_test_reference_standard_viewed: false
     mlflow_parent_run_ids: [bd2a454367334345b2ace45e07b41138, 78d582cf6f124664b054b2bf07523f87, b7173871cd0c4f4a9d0351246d9f3171, 91f3767ba9604aeaab8b3bcff9fdb393, fb4c2e53bbd24bd7ad31414d92cc4304]
     mlflow_fold_run_ids: [06b52a8fc4c144d2ba6bd952e650d808, fb4bf050a82440a785e24b281be93614, 060a544e07074dc79f743fc995b309c8, 68f9eb2d39114833ad6d7016fc958f03, 9b0eac892a87459d9dba9cf66677d5d7]
-    markdown_report: docs/project/E3_均值特征池化实验预登记_2026-08-02.md
-    failure_or_negative_reason: fold0低于E1；fold0/3的SPA及fold4的损伤灵敏度为0；折间差异大，须合并OOF判断
-    conclusion: 五折完成且4/5折高于E1，方向门槛通过；总体、CI和相对E2类别安全尚未评价
-    next_step: 文档与产物审计、提交登记后合并OOF并一次性执行全部预登记门槛
+    markdown_report: docs/project/E3_均值特征池化五折结果_2026-08-02.md
+    failure_or_negative_reason: macro-F1 0.3010低于0.3463；正常/痛风/损伤F1较E2下降0.0591/0.1710/0.2267，超过0.05类别安全上限
+    conclusion: 相对E1、折方向和校准通过，但总体性能及类别安全失败；E3不晋级并停止聚合器搜索
+    next_step: 按ADR-009审计28类区域/病变标注的监督可用性；F0-F2继续阻塞
 
   - id: C0-C4-preregistration
     kind: formal_study_preregistration
