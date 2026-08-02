@@ -145,7 +145,7 @@ def main() -> int:
             "diagnosis_id": int(row["diagnosis_id"]),
             "outer_fold": int(row["outer_fold"]),
         }
-    proxy, oof_rows = evaluate_manual_presence_proxy(
+    proxy, oof_rows, proxy_weights = evaluate_manual_presence_proxy(
         list(patient_rows_by_key.values()),
         patient_labels,
         categories,
@@ -159,6 +159,19 @@ def main() -> int:
         "numeric_thread_limit": 2,
         "below_normal_priority": below_normal_priority,
         "gpu_used": False,
+    }
+
+    output_dir = PATIENT_MULTIMODAL_REPORTS_DIR / "annotation_supervision"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    weights_path = output_dir / "annotation_presence_proxy_weights.json"
+    weights_path.write_text(
+        json.dumps(proxy_weights, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    weights_sha256 = sha256_file(weights_path)
+    report["model_artifact"] = {
+        "kind": "cross_fitted_logistic_regression_coefficients",
+        "path": weights_path.relative_to(ROOT).as_posix(),
+        "sha256": weights_sha256,
     }
 
     tracker = LocalResearchTracker(
@@ -196,13 +209,12 @@ def main() -> int:
         "mlflow_experiment": "patient-primary-diagnosis",
         "mlflow_parent_run_id": mlflow_run_id,
     }
+    tracker.client.set_tag(mlflow_run_id, "model_artifact_sha256", weights_sha256)
     serialized = json.dumps(report, ensure_ascii=False, indent=2)
     forbidden = ("raw_image_path", "raw_annotation_path", "normalized_annotation_path")
     if any(token in serialized for token in forbidden):
         raise ValueError("Audit report contains a source path field")
 
-    output_dir = PATIENT_MULTIMODAL_REPORTS_DIR / "annotation_supervision"
-    output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "annotation_supervision_audit.json"
     report_path.write_text(serialized, encoding="utf-8")
     category_path = output_dir / "annotation_category_support.csv"
@@ -237,6 +249,7 @@ def main() -> int:
                 "report_sha256": sha256_file(report_path),
                 "category_support_sha256": sha256_file(category_path),
                 "proxy_oof_sha256": sha256_file(oof_path),
+                "proxy_weights_sha256": weights_sha256,
                 "mlflow_parent_run_id": mlflow_run_id,
                 "support_summary": report["support_summary"],
                 "proxy_macro_f1": {

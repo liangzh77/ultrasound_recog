@@ -294,7 +294,7 @@ def evaluate_manual_presence_proxy(
     category_roles: Mapping[str, str],
     bootstrap_samples: int = 2_000,
     bootstrap_seed: int = 20260724,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     """Cross-fit diagnosis from manual label presence as a workflow-bias audit."""
     from sklearn.linear_model import LogisticRegression
 
@@ -308,6 +308,7 @@ def evaluate_manual_presence_proxy(
     }
     result = {}
     all_oof = {}
+    model_weights = {}
     for group, group_categories in feature_groups.items():
         matrix = np.asarray(
             [
@@ -318,6 +319,7 @@ def evaluate_manual_presence_proxy(
         )
         probabilities = np.zeros((len(rows), len(DIAGNOSIS_CLASSES)), dtype=np.float64)
         fold_macro_f1 = []
+        group_weights = []
         for fold in range(5):
             train = folds != fold
             test = folds == fold
@@ -330,6 +332,16 @@ def evaluate_manual_presence_proxy(
             )
             model.fit(matrix[train], y[train])
             probabilities[test] = model.predict_proba(matrix[test])
+            group_weights.append(
+                {
+                    "fold": fold,
+                    "classes": [int(value) for value in model.classes_],
+                    "feature_categories": group_categories,
+                    "coef": model.coef_.tolist(),
+                    "intercept": model.intercept_.tolist(),
+                    "n_iter": [int(value) for value in model.n_iter_],
+                }
+            )
             fold_macro_f1.append(
                 compute_patient_metrics(
                     y[test], probabilities[test], DIAGNOSIS_CLASSES
@@ -355,6 +367,7 @@ def evaluate_manual_presence_proxy(
             },
         }
         all_oof[group] = probabilities
+        model_weights[group] = group_weights
 
     output_rows = []
     for index, row in enumerate(rows):
@@ -368,4 +381,4 @@ def evaluate_manual_presence_proxy(
             for class_id in range(len(DIAGNOSIS_CLASSES)):
                 output[f"{group}_prob_{class_id}"] = float(probabilities[index, class_id])
         output_rows.append(output)
-    return result, output_rows
+    return result, output_rows, model_weights
