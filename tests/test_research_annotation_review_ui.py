@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QLabel
 from src.research_annotation_review_ui import (
     ReviewImageRepository,
     ReviewQueuePreviewWindow,
+    audit_review_queue_rois,
     configure_cjk_font,
     load_roi_qimage,
 )
@@ -126,3 +127,32 @@ def test_preview_navigation_has_keyboard_equivalent_and_clamped_bounds():
             assert window.current_index == 0
         finally:
             window.close()
+
+
+def test_roi_queue_audit_reports_aggregate_failures_without_source_paths():
+    app = QApplication.instance() or QApplication([])
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        image_path, annotation_path = _write_image_and_annotation(root, "ok")
+        repository = ReviewImageRepository(
+            root,
+            [
+                {
+                    "image_key": "KNEE_IMG_OK",
+                    "raw_image_path": image_path.name,
+                    "normalized_annotation_path": annotation_path.name,
+                }
+            ],
+        )
+        result = audit_review_queue_rois(
+            [
+                {"review_case_key": "R_OK", "image_key": "KNEE_IMG_OK"},
+                {"review_case_key": "R_MISSING", "image_key": "KNEE_IMG_MISSING"},
+            ],
+            repository,
+        )
+
+        assert result["loaded_rois"] == 1
+        assert result["failed_rois"] == 1
+        assert result["failed_review_case_keys"] == ["R_MISSING"]
+        assert str(root) not in json.dumps(result)

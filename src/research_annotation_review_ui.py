@@ -121,6 +121,32 @@ class ReviewImageRepository:
         return load_roi_qimage(image_path, annotation_path)
 
 
+def audit_review_queue_rois(
+    rows: list[Mapping[str, Any]], repository: ReviewImageRepository
+) -> dict[str, Any]:
+    """Load every queue ROI and return privacy-safe aggregate evidence."""
+    widths = []
+    heights = []
+    failures = []
+    for row in rows:
+        try:
+            image = repository.load_roi(str(row["image_key"]))
+            widths.append(image.width())
+            heights.append(image.height())
+        except Exception:
+            failures.append(str(row["review_case_key"]))
+    return {
+        "rows": len(rows),
+        "loaded_rois": len(widths),
+        "failed_rois": len(failures),
+        "failed_review_case_keys": failures,
+        "roi_width_min_max": [min(widths), max(widths)] if widths else None,
+        "roi_height_min_max": [min(heights), max(heights)] if heights else None,
+        "diagnosis_or_legacy_annotation_loaded_for_display": False,
+        "pixels_outside_confirmed_roi_loaded_for_display": False,
+    }
+
+
 class ReviewQueuePreviewWindow(QMainWindow):
     """Read-only queue preview that never displays diagnoses or legacy labels."""
 
