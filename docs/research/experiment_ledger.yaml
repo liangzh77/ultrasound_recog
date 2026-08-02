@@ -8,6 +8,37 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: S1-annotation-supervision-audit-preregistration
+    kind: formal_bias_audit_preregistration
+    status: preregistered_formal_pending
+    research_question: 规范化28类多边形标注是否在覆盖、几何、患者级五折支持度、类别重叠和疾病捷径方面足以支持后续病变定位或诊断辅助监督
+    preregistered_gate: 类别恰为28且未知类与疾病前缀残留均为0；robust至少50患者且每fold至少5，limited至少20且每fold至少2；人工标注存在性代理任一组macro-F1大于等于0.20或macro-AUC大于等于0.65即标记高可分偏差；跨类正面积重叠时禁止直接构造单张互斥28类mask；不存在穷尽性协议时缺失类别不视为真阴性
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 777447a7c0db046a215e25e79cc284a6ff0e861d
+    config:
+      path: configs/research/annotation_supervision_audit.yaml
+      source: git_blob_at_commit
+      sha256: 46d7ef6b08d9728addcce1b523a9ac92a3be561d23d9fdbf965dffc22aecf5bd
+    command: python tools/34_audit_annotation_supervision.py --config configs/research/annotation_supervision_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_deterministic_geometry_audit_and_logistic_proxy
+    hardware: CPU low priority with two numeric threads; GPU not used
+    oof: pending_formal_annotation_presence_proxy
+    results:
+      implementation_git: 777447a7c0db046a215e25e79cc284a6ff0e861d
+      focused_tests: 5 passed
+      full_tests: 118 passed
+      real_annotation_results_seen_before_preregistration: false
+      annotation_roles: provisional_pending_clinical_review
+      absence_as_true_negative: not_established_without_exhaustive_protocol
+      mlflow_status: pending_formal_run
+    mlflow_parent_run_ids: [pending_formal_run]
+    markdown_report: docs/project/区域病变标注监督审计预登记_2026-08-02.md
+    failure_or_negative_reason: not_applicable_results_unknown
+    conclusion: 方法、配置、偏差阈值和停止规则已在真实结果未知时冻结；尚未形成监督可用性或模型选择结论
+    next_step: 文档与产物一致性审计通过并提交后，正式运行一次并生成独立阶段报告与方法ADR
+
   - id: E3-preregistration
     kind: formal_study_preregistration
     status: resource_pilot_passed_formal_pending
