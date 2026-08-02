@@ -49,11 +49,13 @@ def test_workbook_contract_rejects_missing_sheet(tmp_path):
 
 def test_validation_output_cannot_escape_project(tmp_path):
     with pytest.raises(ValueError, match="review report directory"):
-        TOOL._project_output(tmp_path / "outside.json", "a" * 64)
+        TOOL._project_output(tmp_path / "outside.json", "a" * 64, "b" * 64)
 
 
 def test_default_validation_output_is_versioned_by_input_hash():
-    output = TOOL._project_output(None, "a" * 64)
+    output = TOOL._project_output(None, "a" * 64, "b" * 64)
 
     assert output.parent == TOOL.OUTPUT_DIR.resolve()
-    assert output.name == "annotation_clinical_confirmation_validation_aaaaaaaaaaaa.json"
+    assert output.name == (
+        "annotation_clinical_confirmation_validation_aaaaaaaaaaaa_bbbbbbbbbbbb.json"
+    )

@@ -116,10 +116,15 @@ def _validate_workbook_container(path: Path) -> dict[str, object]:
     return {"xlsx_container_valid": True, "required_sheets_present": sorted(observed)}
 
 
-def _project_output(path: Path | None, input_sha256: str) -> Path:
+def _project_output(
+    path: Path | None,
+    input_sha256: str,
+    review_config_sha256: str,
+) -> Path:
     if path is None:
         path = OUTPUT_DIR / (
-            f"annotation_clinical_confirmation_validation_{input_sha256[:12]}.json"
+            "annotation_clinical_confirmation_validation_"
+            f"{input_sha256[:12]}_{review_config_sha256[:12]}.json"
         )
     resolved = path.resolve()
     try:
@@ -161,6 +166,8 @@ def main() -> int:
     source_workbook_contract = _validate_workbook_container(source_workbook_path)
     payload = _read_yaml(input_path)
     review_config = _read_yaml(review_config_path)
+    confirmation_sha256 = sha256_file(input_path)
+    review_config_sha256 = sha256_file(review_config_path)
     common = {
         "expected_dataset_fingerprint": review_config["dataset_fingerprint"],
         "expected_annotation_version": review_config["annotation_version"],
@@ -172,8 +179,8 @@ def main() -> int:
             raise ValueError("--completed-workbook is not allowed with --template-check")
         result = validate_confirmation_template(payload, **common)
         result["provenance"] = {
-            "confirmation_yaml_sha256": sha256_file(input_path),
-            "review_config_sha256": sha256_file(review_config_path),
+            "confirmation_yaml_sha256": confirmation_sha256,
+            "review_config_sha256": review_config_sha256,
             "source_workbook_sha256": sha256_file(source_workbook_path),
             "dataset_fingerprint": review_config["dataset_fingerprint"],
             "annotation_version": review_config["annotation_version"],
@@ -181,7 +188,9 @@ def main() -> int:
             "validation_git": _git_state(),
         }
         result["runtime_seconds"] = time.perf_counter() - started
-        output_path = _project_output(args.output, sha256_file(input_path))
+        output_path = _project_output(
+            args.output, confirmation_sha256, review_config_sha256
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -221,8 +230,8 @@ def main() -> int:
         extracted_workbook, payload
     )
     result["provenance"] = {
-        "confirmation_yaml_sha256": sha256_file(input_path),
-        "review_config_sha256": sha256_file(review_config_path),
+        "confirmation_yaml_sha256": confirmation_sha256,
+        "review_config_sha256": review_config_sha256,
         "source_workbook_sha256": sha256_file(source_workbook_path),
         "completed_workbook_sha256": completed_workbook_sha256,
         "dataset_fingerprint": review_config["dataset_fingerprint"],
@@ -233,7 +242,9 @@ def main() -> int:
     }
     result["runtime_seconds"] = time.perf_counter() - started
     result["provenance"]["validation_git"] = _git_state()
-    output_path = _project_output(args.output, sha256_file(input_path))
+    output_path = _project_output(
+        args.output, confirmation_sha256, review_config_sha256
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
