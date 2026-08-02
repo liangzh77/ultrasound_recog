@@ -22,6 +22,12 @@ selection:
   balance_candidate_diagnoses_internally: true
   diagnosis_visible_to_reviewer: false
   legacy_annotation_visible_to_reviewer: false
+review_protocol:
+  stage: semantic_presence_only
+  legacy_polygon_visible_to_reviewer: false
+  reviewer_polygon_capture: false
+  polygon_action_policy: fixed_not_applicable
+  geometry_reliability_stage: S1b
 review_targets:
   - 滑膜
   - 滑膜血流
