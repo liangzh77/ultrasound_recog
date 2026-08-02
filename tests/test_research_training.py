@@ -11,6 +11,7 @@ from src.research_config import (
     resolve_pretrained_weights,
 )
 from src.research_models import MaskedMeanClassifier
+from src.research_mil import GatedAttentionMILClassifier
 from src.research_training import (
     EarlyStopping,
     make_patient_balanced_sampler,
@@ -82,6 +83,25 @@ def test_e1s_changes_only_the_preregistered_resize_mode():
     assert comparable_e1 == comparable_e1s
 
 
+def test_e2_changes_only_patient_aggregation_from_e1():
+    e1 = load_research_config(ROOT / "configs/research/e1_roi_mean_b2.yaml")
+    e2 = load_research_config(
+        ROOT / "configs/research/e2_roi_gated_attention_b2.yaml"
+    )
+
+    comparable_e1 = deepcopy(e1)
+    comparable_e2 = deepcopy(e2)
+    comparable_e1.pop("experiment_code")
+    comparable_e2.pop("experiment_code")
+    comparable_e2["model"].pop("aggregation")
+    comparable_e2["model"].pop("attention_dim")
+    comparable_e2["model"].pop("attention_collapse_threshold")
+    comparable_e2["model"].pop("max_multi_image_collapse_rate")
+
+    assert e2["model"]["aggregation"] == "gated_attention"
+    assert comparable_e1 == comparable_e2
+
+
 def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):
     weights = tmp_path / "weights.bin"
     weights.write_bytes(b"known weights")
@@ -140,6 +160,31 @@ def test_training_and_validation_epoch_return_patient_level_outputs():
     assert validated["targets"].tolist() == [0, 0, 0, 1]
     assert validated["person_keys"] == ["P0", "P1", "P2", "P3"]
     assert torch.allclose(validated["probabilities"].sum(dim=1), torch.ones(4))
+
+
+def test_patient_epoch_collects_mil_attention_without_second_pass():
+    model = GatedAttentionMILClassifier(
+        TinyEncoder(),
+        feature_dim=3,
+        num_classes=2,
+        attention_dim=4,
+        dropout=0.0,
+    )
+    loader = DataLoader(TinyBags(), batch_size=2, collate_fn=_collate)
+
+    result = run_patient_epoch(
+        model,
+        loader,
+        device=torch.device("cpu"),
+        optimizer=None,
+        amp=False,
+        collect_attention=True,
+    )
+
+    assert len(result["attention_summaries"]) == 4
+    assert result["attention_summaries"][0]["person_key"] == "P0"
+    assert result["attention_summaries"][0]["image_keys"] == ["I0"]
+    assert result["attention_summaries"][0]["attention_weights"] == [1.0]
 
 
 def test_early_stopping_tracks_best_epoch_and_patience():

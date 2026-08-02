@@ -33,7 +33,7 @@
 | 非医学代理审计 | 完成，未通过 | [非医学采集与导出代理审计](../project/非医学采集与导出代理审计_2026-08-02.md) | `reports/proxy_audit/*.json` |
 | E1-S ROI几何敏感性 | 完成，未通过门槛并停止 | [E1-S五折结果](../project/E1S_ROI几何敏感性消融结果_2026-08-02.md) | `reports/oof/E1S_oof.csv` |
 | 检查点A1 输入选择 | 完成 | [ADR-004](../decisions/ADR-004-排除整图主模型并开展ROI几何敏感性消融.md)与实施计划 | 固定人工确认ROI、等比例letterbox，不加边距 |
-| E2 Attention MIL | 准备中 | 实施计划 | 待实现与单折资源试运行 |
+| E2 Attention MIL | 实现完成，待资源试运行 | 实施计划与当日日志 | 配置 `configs/research/e2_roi_gated_attention_b2.yaml` |
 | 图像+Excel融合 | 未开始 | 待图像主模型冻结 | 无 |
 | 2026标签隐藏盲测 | 隔离 | 最终模型冻结后一次性执行 | 尚无预测 |
 

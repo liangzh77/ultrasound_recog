@@ -1,4 +1,4 @@
-"""Train one E0/E1 outer fold with patient-level mean probability aggregation."""
+"""Train one patient-image outer fold with mean or gated-attention aggregation."""
 
 from __future__ import annotations
 
@@ -107,6 +107,13 @@ def _optimizer_and_scheduler(model, config, epochs):
     import torch
 
     optimizer_config = config["optimizer"]
+    aggregation_parameters = [
+        parameter
+        for name, parameter in model.named_parameters()
+        if not name.startswith("encoder.")
+    ]
+    if not aggregation_parameters:
+        raise ValueError("Patient model has no aggregation/head parameters")
     optimizer = torch.optim.AdamW(
         [
             {
@@ -114,7 +121,7 @@ def _optimizer_and_scheduler(model, config, epochs):
                 "lr": float(optimizer_config["encoder_lr"]),
             },
             {
-                "params": model.head.parameters(),
+                "params": aggregation_parameters,
                 "lr": float(optimizer_config["head_lr"]),
             },
         ],
@@ -159,6 +166,44 @@ def _write_predictions(path: Path, result, outer_fold: int, model_id: str) -> No
         )
         rows.append(row)
     rows.sort(key=lambda item: item["person_key"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_attention(
+    path: Path,
+    result,
+    outer_fold: int,
+    model_id: str,
+) -> None:
+    summaries = result.get("attention_summaries", [])
+    if not summaries:
+        raise ValueError("MIL test result has no attention summaries")
+    rows = []
+    for summary in summaries:
+        image_keys = summary["image_keys"]
+        weights = summary["attention_weights"]
+        if len(image_keys) != len(weights):
+            raise ValueError("MIL image keys and attention weights do not match")
+        ranking = sorted(range(len(weights)), key=lambda index: weights[index], reverse=True)
+        ranks = {image_index: rank + 1 for rank, image_index in enumerate(ranking)}
+        for image_index, (image_key, weight) in enumerate(zip(image_keys, weights)):
+            rows.append(
+                {
+                    "prediction_level": "image_importance",
+                    "person_key": summary["person_key"],
+                    "image_key": image_key,
+                    "outer_fold": outer_fold,
+                    "model_id": model_id,
+                    "image_count": len(image_keys),
+                    "attention_weight": float(weight),
+                    "attention_rank": ranks[image_index],
+                }
+            )
+    rows.sort(key=lambda item: (item["person_key"], item["attention_rank"]))
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
@@ -223,6 +268,7 @@ def main() -> int:
         load_fold_records,
     )
     from src.research_metrics import compute_patient_metrics
+    from src.research_mil import GatedAttentionMILClassifier, summarize_attention
     from src.research_models import MaskedMeanClassifier, create_timm_encoder
     from src.research_schema import DIAGNOSIS_CLASSES
     from src.research_tracking import LocalResearchTracker
@@ -271,6 +317,7 @@ def main() -> int:
         "experiment_code": config["experiment_code"],
         "input_mode": config["input_mode"],
         "resize_mode": config["data"]["resize_mode"],
+        "aggregation": config["model"].get("aggregation", "mean_probability"),
         "outer_fold": args.fold,
         "seed": seed,
         "pilot": args.pilot,
@@ -358,12 +405,22 @@ def main() -> int:
         pretrained=bool(config["model"]["pretrained"]),
         pretrained_path=pretrained_path,
     )
-    model = MaskedMeanClassifier(
-        encoder,
-        feature_dim,
-        num_classes=int(config["model"]["num_classes"]),
-        dropout=float(config["model"]["dropout"]),
-    ).cuda()
+    aggregation = config["model"].get("aggregation", "mean_probability")
+    if aggregation == "gated_attention":
+        model = GatedAttentionMILClassifier(
+            encoder,
+            feature_dim,
+            num_classes=int(config["model"]["num_classes"]),
+            attention_dim=int(config["model"]["attention_dim"]),
+            dropout=float(config["model"]["dropout"]),
+        ).cuda()
+    else:
+        model = MaskedMeanClassifier(
+            encoder,
+            feature_dim,
+            num_classes=int(config["model"]["num_classes"]),
+            dropout=float(config["model"]["dropout"]),
+        ).cuda()
     epochs = (
         args.pilot_epochs
         or int(config["training"]["pilot_epochs"])
@@ -417,6 +474,7 @@ def main() -> int:
             "prediction_level": "patient",
             "input_mode": config["input_mode"],
             "resize_mode": resize_mode,
+            "aggregation": aggregation,
             "git_revision": revision,
             "git_dirty": dirty,
             "pilot": args.pilot,
@@ -576,6 +634,7 @@ def main() -> int:
                     optimizer=None,
                     amp=bool(config["training"]["amp"]),
                     instance_chunk_size=int(data_config["max_instances_train"]),
+                    collect_attention=aggregation == "gated_attention",
                 )
                 test_metrics = compute_patient_metrics(
                     test_result["targets"].numpy(),
@@ -609,9 +668,45 @@ def main() -> int:
                     ),
                     "stop_reason": stop_status,
                 }
+                if aggregation == "gated_attention":
+                    attention_path = (
+                        PATIENT_MULTIMODAL_REPORTS_DIR
+                        / "attention"
+                        / f"{code}_fold{args.fold}.csv"
+                    )
+                    _write_attention(
+                        attention_path,
+                        test_result,
+                        args.fold,
+                        run_id,
+                    )
+                    attention_relative = attention_path.relative_to(ROOT).as_posix()
+                    attention_audit = summarize_attention(
+                        test_result["attention_summaries"],
+                        collapse_threshold=float(
+                            config["model"]["attention_collapse_threshold"]
+                        ),
+                    )
+                    attention_audit["max_allowed_multi_image_collapse_rate"] = float(
+                        config["model"]["max_multi_image_collapse_rate"]
+                    )
+                    attention_audit["collapse_gate_passed"] = bool(
+                        attention_audit["multi_image_collapse_rate"]
+                        <= attention_audit["max_allowed_multi_image_collapse_rate"]
+                    )
+                    summary.update(
+                        {
+                            "attention_path": attention_relative,
+                            "attention_sha256": sha256_file(attention_path),
+                            "attention_audit": attention_audit,
+                        }
+                    )
             else:
                 raise RuntimeError("No best checkpoint was produced")
 
+    if best_path.is_file():
+        summary["best_checkpoint_path"] = best_path.relative_to(ROOT).as_posix()
+        summary["best_checkpoint_sha256"] = sha256_file(best_path)
     summary_path = PATIENT_MULTIMODAL_REPORTS_DIR / f"{run_id}_summary.json"
     summary_path.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2),

@@ -97,6 +97,7 @@ def run_patient_epoch(
     gradient_clip: float = 1.0,
     scaler: torch.amp.GradScaler | None = None,
     instance_chunk_size: int | None = None,
+    collect_attention: bool = False,
 ) -> dict[str, Any]:
     if accumulation_steps < 1:
         raise ValueError("accumulation_steps must be positive")
@@ -117,6 +118,7 @@ def run_patient_epoch(
     all_targets = []
     all_person_keys: list[str] = []
     all_image_counts = []
+    attention_summaries: list[dict[str, Any]] = []
     for batch_index, batch in enumerate(batches):
         images = batch["images"].to(device, non_blocking=True)
         mask = batch["instance_mask"].to(device, non_blocking=True)
@@ -151,9 +153,25 @@ def run_patient_epoch(
         all_probabilities.append(outputs["patient_probabilities"].detach().cpu())
         all_targets.append(targets.detach().cpu())
         all_person_keys.extend(batch["person_keys"])
-        all_image_counts.extend(mask.sum(dim=1).detach().cpu().tolist())
+        image_counts = mask.sum(dim=1).detach().cpu().tolist()
+        all_image_counts.extend(image_counts)
+        if collect_attention and "attention_weights" in outputs:
+            attention = outputs["attention_weights"].detach().cpu()
+            for patient_index, image_count in enumerate(image_counts):
+                image_keys = list(batch["image_keys"][patient_index])
+                if len(image_keys) != image_count:
+                    raise ValueError("Image keys do not match valid MIL instances")
+                attention_summaries.append(
+                    {
+                        "person_key": batch["person_keys"][patient_index],
+                        "image_keys": image_keys,
+                        "attention_weights": attention[
+                            patient_index, :image_count
+                        ].tolist(),
+                    }
+                )
 
-    return {
+    result = {
         "prediction_level": "patient",
         "loss": total_loss / total_patients,
         "probabilities": torch.cat(all_probabilities),
@@ -161,3 +179,6 @@ def run_patient_epoch(
         "person_keys": all_person_keys,
         "image_counts": all_image_counts,
     }
+    if collect_attention:
+        result["attention_summaries"] = attention_summaries
+    return result

@@ -37,11 +37,11 @@ def load_research_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("Research config must be a mapping")
-    if config.get("experiment_code") not in {"E0", "E1", "E1S"}:
-        raise ValueError("Only E0/E1/E1S configs are supported by the mean baseline")
+    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2"}:
+        raise ValueError("Unsupported patient image experiment code")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi"}[
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi"}[
         config["experiment_code"]
     ]
     if config["input_mode"] != expected_mode:
@@ -52,10 +52,13 @@ def load_research_config(path: Path) -> dict[str, Any]:
     training = config.get("training", {})
     runtime = config.get("runtime", {})
     if data.get("output_size") != 384:
-        raise ValueError("E0/E1/E1S v1 must use 384 pixel inputs")
-    expected_resize = {"E0": "letterbox", "E1": "letterbox", "E1S": "stretch"}[
-        config["experiment_code"]
-    ]
+        raise ValueError("Patient image v1 must use 384 pixel inputs")
+    expected_resize = {
+        "E0": "letterbox",
+        "E1": "letterbox",
+        "E1S": "stretch",
+        "E2": "letterbox",
+    }[config["experiment_code"]]
     if data.get("resize_mode") != expected_resize:
         raise ValueError("Experiment code and resize_mode do not match")
     if not 1 <= int(data.get("max_instances_train", 0)) <= 6:
@@ -67,9 +70,26 @@ def load_research_config(path: Path) -> dict[str, Any]:
     if model.get("num_classes") != 6:
         raise ValueError("The frozen primary diagnosis task has six classes")
     if model.get("pretrained") is not True:
-        raise ValueError("E0/E1 formal configs require ImageNet-1K pretraining")
+        raise ValueError("Patient image configs require ImageNet-1K pretraining")
     if not model.get("pretrained_path") or not model.get("pretrained_sha256"):
         raise ValueError("Local pretrained path and SHA-256 are required")
+    aggregation = model.get("aggregation", "mean_probability")
+    expected_aggregation = (
+        "gated_attention"
+        if config["experiment_code"] == "E2"
+        else "mean_probability"
+    )
+    if aggregation != expected_aggregation:
+        raise ValueError("Experiment code and patient aggregation do not match")
+    if aggregation == "gated_attention":
+        if int(model.get("attention_dim", 0)) != 256:
+            raise ValueError("E2 v1 attention_dim must be 256")
+        collapse_threshold = float(model.get("attention_collapse_threshold", 0))
+        max_collapse_rate = float(model.get("max_multi_image_collapse_rate", -1))
+        if not 0 < collapse_threshold <= 1:
+            raise ValueError("attention_collapse_threshold must be in (0, 1]")
+        if not 0 <= max_collapse_rate <= 1:
+            raise ValueError("max_multi_image_collapse_rate must be in [0, 1]")
     if int(training.get("max_epochs", 0)) > 60:
         raise ValueError("max_epochs cannot exceed 60")
     if int(training.get("pilot_epochs", 0)) > 5:
