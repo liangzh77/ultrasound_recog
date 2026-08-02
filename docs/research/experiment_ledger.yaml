@@ -8,6 +8,34 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: C0-C4-preregistration
+    kind: formal_study_preregistration
+    status: preregistered_not_run
+    research_question: 人口学、化验缺失模式和允许的临床数值分别能在异常五分类中提供多少信息，显式缺失指示器是否主要放大工作流偏差
+    preregistered_gate: C2比C0高至少0.05即确认实质缺失偏差；C3须比C1高至少0.05、至少4/5折方向为正且五类F1均大于0.10；C4比C3高至少0.02或配对CI完全大于0则标记工作流依赖；C0/C1/C2/C4均不晋级
+    data_fingerprint: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+    git_commit: f11ee1906071f3039dda56ed93608c228c629110
+    config:
+      path: configs/research/c0_c4_clinical_logreg.yaml
+      source: git_blob_at_commit
+      sha256: b2eb01939f69fa872fe5303b706c5ce9dc9a9fad9648c7272760e7eb05aeda71
+    command: python tools/32_train_clinical_baselines.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_cpu_logistic_regression
+    hardware: Intel i5-10400; 32GB RAM; at most two CPU numerical-library threads; GPU unused
+    oof: pending_for_C0_C1_C2_C3_C4
+    results:
+      clinical_table_path: workspace/data/shared_derived/exp_2026-07_patient_multimodal_v1/clinical_features.csv
+      clinical_table_sha256: 1074255b63b76444e0f798fe4ab7e16793d5bcbbf8ddbeb558cd1d7553e2eaef
+      input_audit_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/clinical_input_audit.json
+      input_audit_sha256: 484aee2605af312030666c766bec02cd13b77426c82dbdbb6b58f511d6f4c9c2
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/C0_C4临床输入决策与实验预登记_2026-08-02.md
+    failure_or_negative_reason: none_not_run
+    conclusion: 输入合同、数据指纹和五个实验门槛已在结果未知时冻结
+    next_step: 文档与产物审计、提交预登记后运行C0-C4固定五折
+
   - id: E0-fivefold-formal
     kind: formal_model
     status: completed_negative
