@@ -18,7 +18,7 @@ def test_current_research_ledger_has_required_provenance_and_valid_hashes():
     result = validate_research_ledger(LEDGER, ROOT, verify_artifacts=True)
 
     assert result["study_id"] == "knee_patient_multimodal_v1_20260724"
-    assert result["experiments"] == 5
+    assert result["experiments"] == 6
     assert result["formal_models"] == 3
 
 
@@ -42,7 +42,13 @@ def test_ledger_rejects_absolute_or_raw_patient_paths():
 
 def test_in_progress_formal_model_verifies_every_completed_fold_oof():
     ledger = yaml.safe_load(LEDGER.read_text(encoding="utf-8"))
-    record = deepcopy(ledger["experiments"][-1])
+    record = deepcopy(
+        next(
+            item
+            for item in ledger["experiments"]
+            if item["id"] == "E1S-fivefold-formal"
+        )
+    )
     record["additional_fold_oof"][0]["sha256"] = "0" * 64
 
     with pytest.raises(ValueError, match="Additional OOF"):

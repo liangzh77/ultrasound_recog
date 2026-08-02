@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T22:45:00+08:00
+updated_at: 2026-08-02T23:10:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -249,3 +249,38 @@ experiments:
     failure_or_negative_reason: macro-F1比E1低0.0222且正常/OA灵敏度分别下降0.1100/0.1698，均触发预注册失败门槛
     conclusion: E1-S停止；A1冻结为人工确认ROI等比例letterbox至384x384，不加边距
     next_step: 实现E2 gated Attention MIL并运行单折资源试运行
+
+  - id: E2-fold0-pilot
+    kind: resource_pilot
+    status: completed_pipeline_only
+    research_question: gated Attention MIL训练管线是否满足本机资源、可变bag和外层隔离合同
+    preregistered_gate: 5 epochs小于1小时、峰值显存不超过9GB、外层测试不迭代；pilot分数不用于选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: dfb98dfa87b89e2f5da0e17b9066de4501dbdeff
+    config:
+      path: configs/research/e2_roi_gated_attention_b2.yaml
+      source: git_blob_at_commit
+      sha256: 3e4693b94b09d3b8da1853659581975030940456979b3041cdad48be115c029a
+    command: python tools/29_train_patient_mil.py --config configs/research/e2_roi_gated_attention_b2.yaml --fold 0 --pilot
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours: 0.1388323183
+    peak_allocated_gpu_gb: 1.2578048706
+    peak_reserved_gpu_gb: 1.3593750000
+    outer_test_iterated: false
+    oof: not_applicable_resource_pilot
+    results:
+      best_validation_macro_f1: 0.3205821956
+      best_epoch: 4
+      checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2/fold_0/best_pilot.pt
+      checkpoint_sha256: ab5da2eac931b81687eb46be21efb6d86cab40d98e63defc0ffb00b9e3821980
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E2-fold0-seed20260724-pilot_summary.json
+      summary_sha256: b58c7c409bd02f197915f3efc2761bd88886d2ab32a9d18eb93ca85f1dad78ad
+    mlflow_parent_run_ids: [b9f86c5a4c3448f9900ad02e4228f321]
+    mlflow_fold_run_ids: [8784f01e1ec54cdb9fe2c9e1c0679efc]
+    markdown_report: docs/research/logs/2026-08-02.md
+    failure_or_negative_reason: not_applicable_pipeline_passed_score_not_used_for_selection
+    conclusion: 资源与隔离合同通过，允许启动E2正式固定五折
+    next_step: 从fold 0开始顺序运行E2正式五折并逐折登记
