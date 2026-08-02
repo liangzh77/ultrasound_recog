@@ -6,6 +6,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from xml.etree import ElementTree
 import zipfile
@@ -145,6 +146,7 @@ def _git_state() -> dict[str, object]:
 
 
 def main() -> int:
+    started = time.perf_counter()
     args = parse_args()
     set_below_normal_priority()
     input_path = args.input.resolve()
@@ -174,6 +176,7 @@ def main() -> int:
             "workbook_contract": source_workbook_contract,
             "validation_git": _git_state(),
         }
+        result["runtime_seconds"] = time.perf_counter() - started
         output_path = _project_output(args.output, sha256_file(input_path))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
@@ -220,6 +223,7 @@ def main() -> int:
         "source_workbook_contract": source_workbook_contract,
         "completed_workbook_contract": completed_workbook_contract,
     }
+    result["runtime_seconds"] = time.perf_counter() - started
     result["provenance"]["validation_git"] = _git_state()
     output_path = _project_output(args.output, sha256_file(input_path))
     output_path.parent.mkdir(parents=True, exist_ok=True)
