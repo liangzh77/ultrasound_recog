@@ -1,0 +1,76 @@
+schema_version: 0
+status: clinical_review_required
+study: knee_annotation_ontology_s1a
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+source_audit: annotation_supervision_audit_v1
+global_rules:
+  diagnosis_names_forbidden_in_targets: true
+  overlapping_instances_allowed: true
+  unlabeled_means_negative: false
+  negative_state_required: absent_visible
+  nonnegative_states: [present, not_in_view, uncertain, legacy_unknown]
+  roi_boundary_policy: clip_and_flag_truncated_for_review
+  diagnosis_blinded_review_preferred: true
+  patient_level_outer_folds_frozen: true
+  diagnosis_features_require_outer_fold_oof_predictions: true
+candidate_families:
+  anatomy_reference:
+    intended_use: localization_or_view_auxiliary_only
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  inflammatory_finding:
+    intended_use: multilabel_or_instance_auxiliary_after_definition_review
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  structural_finding:
+    intended_use: multilabel_or_instance_auxiliary_after_definition_review
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  crystal_finding:
+    intended_use: map_to_consensus_elementary_lesions_before_training
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  traumatic_finding:
+    intended_use: hold_until_support_and_definition_are_sufficient
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  cyst_or_bursal_finding:
+    intended_use: merge_or_define_before_training
+    diagnosis_input_status: prohibited_until_oof_incremental_validation
+  unresolved:
+    intended_use: no_training_until_clinical_definition
+    diagnosis_input_status: prohibited
+categories:
+  内侧副韧带: {family: anatomy_reference, support_tier: robust_multifold, patients: 167, action: anatomy_auxiliary_candidate}
+  内侧半月板: {family: anatomy_reference, support_tier: robust_multifold, patients: 185, action: anatomy_auxiliary_candidate}
+  半月板囊肿: {family: cyst_or_bursal_finding, support_tier: insufficient_multifold, patients: 1, action: hold_or_merge_after_review}
+  半膜肌: {family: anatomy_reference, support_tier: insufficient_multifold, patients: 1, action: hold_rare}
+  半膜肌腱: {family: anatomy_reference, support_tier: insufficient_multifold, patients: 11, action: hold_rare}
+  囊肿: {family: unresolved, support_tier: insufficient_multifold, patients: 5, action: define_or_merge}
+  外侧副韧带: {family: anatomy_reference, support_tier: limited_multifold, patients: 35, action: exploratory_only}
+  滑膜: {family: unresolved, support_tier: robust_multifold, patients: 465, action: decide_anatomy_vs_hypertrophy}
+  滑膜囊肿: {family: cyst_or_bursal_finding, support_tier: insufficient_multifold, patients: 1, action: hold_or_merge_after_review}
+  滑膜血流: {family: inflammatory_finding, support_tier: robust_multifold, patients: 242, action: priority_definition_review}
+  痛风石: {family: crystal_finding, support_tier: robust_multifold, patients: 50, action: priority_consensus_mapping}
+  积液: {family: inflammatory_finding, support_tier: robust_multifold, patients: 488, action: priority_definition_review}
+  结晶: {family: crystal_finding, support_tier: robust_multifold, patients: 98, action: split_aggregate_vs_double_contour}
+  股二头肌腱: {family: anatomy_reference, support_tier: limited_multifold, patients: 38, action: exploratory_only}
+  股四头肌腱: {family: anatomy_reference, support_tier: robust_multifold, patients: 198, action: anatomy_auxiliary_candidate}
+  腘窝囊肿: {family: cyst_or_bursal_finding, support_tier: robust_multifold, patients: 139, action: priority_definition_review}
+  软骨: {family: anatomy_reference, support_tier: robust_multifold, patients: 795, action: distinguish_structure_vs_damage}
+  骨侵蚀: {family: structural_finding, support_tier: robust_multifold, patients: 100, action: priority_definition_review}
+  骨皮质: {family: anatomy_reference, support_tier: robust_multifold, patients: 825, action: anatomy_auxiliary_candidate}
+  骨赘: {family: structural_finding, support_tier: robust_multifold, patients: 221, action: priority_definition_review}
+  髂胫束: {family: anatomy_reference, support_tier: robust_multifold, patients: 112, action: anatomy_auxiliary_candidate}
+  髌下深囊炎: {family: cyst_or_bursal_finding, support_tier: insufficient_multifold, patients: 4, action: hold_or_merge_after_review}
+  髌前浅筋膜: {family: anatomy_reference, support_tier: robust_multifold, patients: 83, action: confirm_structure_definition}
+  髌前血肿: {family: traumatic_finding, support_tier: insufficient_multifold, patients: 12, action: hold_rare}
+  髌韧带: {family: anatomy_reference, support_tier: robust_multifold, patients: 230, action: anatomy_auxiliary_candidate}
+  鹅足腱: {family: anatomy_reference, support_tier: limited_multifold, patients: 28, action: exploratory_only}
+  鹅足腱滑囊: {family: unresolved, support_tier: insufficient_multifold, patients: 1, action: decide_anatomy_vs_bursitis}
+  鹅足腱滑囊炎: {family: cyst_or_bursal_finding, support_tier: insufficient_multifold, patients: 2, action: hold_or_merge_after_review}
+required_clinical_decisions:
+  - 滑膜表示正常可见滑膜，还是符合定义的滑膜增厚或增生
+  - 滑膜血流是否只标滑膜内Power或Color Doppler信号，并记录成像模式和阈值
+  - 结晶应拆为双轨征、聚集体或其他钙化，不使用泛化结晶名称直接训练
+  - 软骨表示正常解剖结构还是软骨损伤区域
+  - 骨皮质表示可见骨皮质定位，不与骨侵蚀或骨赘混合
+  - 囊肿、滑膜囊肿、半月板囊肿、腘窝囊肿和滑囊炎是否合并为上层类别及保留哪些子类
+  - 鹅足腱滑囊与鹅足腱滑囊炎是否分别表示解剖结构和病变
+  - 每张图对哪些目标完成穷尽标注，哪些只是阳性发现记录
