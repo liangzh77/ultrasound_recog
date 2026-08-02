@@ -100,6 +100,40 @@ class GatedAttentionMILClassifier(nn.Module):
         }
 
 
+def normalized_attention_kl_to_uniform(
+    attention_weights: torch.Tensor,
+    instance_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Return mean bag KL-to-uniform, normalized to [0, 1].
+
+    Single-image bags contribute zero. Padding is ignored. A uniform
+    distribution has penalty zero and a one-hot distribution approaches one.
+    """
+    if attention_weights.shape != instance_mask.shape:
+        raise ValueError("Attention weights and instance mask must have equal shape")
+    if not instance_mask.any(dim=1).all():
+        raise ValueError("Every patient bag must contain at least one image")
+    if (attention_weights[~instance_mask] != 0).any():
+        raise ValueError("Padded attention weights must be zero")
+
+    counts = instance_mask.sum(dim=1).to(attention_weights.dtype)
+    safe_weights = attention_weights.clamp_min(
+        torch.finfo(attention_weights.dtype).tiny
+    )
+    kl = (
+        attention_weights
+        * (safe_weights.log() + counts.log().unsqueeze(1))
+        * instance_mask
+    ).sum(dim=1)
+    denominator = counts.log()
+    normalized = torch.where(
+        counts > 1,
+        kl / denominator.clamp_min(torch.finfo(attention_weights.dtype).eps),
+        torch.zeros_like(kl),
+    )
+    return normalized.mean()
+
+
 def summarize_attention(
     summaries: list[dict[str, object]],
     collapse_threshold: float = 0.95,

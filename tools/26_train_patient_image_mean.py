@@ -319,6 +319,9 @@ def main() -> int:
         "input_mode": config["input_mode"],
         "resize_mode": config["data"]["resize_mode"],
         "aggregation": config["model"].get("aggregation", "mean_probability"),
+        "attention_kl_weight": float(
+            config["training"].get("attention_kl_weight", 0.0)
+        ),
         "outer_fold": args.fold,
         "seed": seed,
         "pilot": args.pilot,
@@ -483,6 +486,9 @@ def main() -> int:
             "input_mode": config["input_mode"],
             "resize_mode": resize_mode,
             "aggregation": aggregation,
+            "attention_kl_weight": float(
+                config["training"].get("attention_kl_weight", 0.0)
+            ),
             "git_revision": revision,
             "git_dirty": dirty,
             "pilot": args.pilot,
@@ -516,6 +522,9 @@ def main() -> int:
                     amp=bool(config["training"]["amp"]),
                     gradient_clip=float(config["optimizer"]["gradient_clip"]),
                     scaler=scaler,
+                    attention_kl_weight=float(
+                        config["training"].get("attention_kl_weight", 0.0)
+                    ),
                 )
                 validation_result = run_patient_epoch(
                     model,
@@ -544,6 +553,12 @@ def main() -> int:
                 row = {
                     "epoch": epoch,
                     "train_loss": train_result["loss"],
+                    "train_classification_loss": train_result[
+                        "classification_loss"
+                    ],
+                    "train_attention_regularization": train_result[
+                        "attention_regularization"
+                    ],
                     "validation_loss": validation_result["loss"],
                     "validation_macro_f1": validation_metrics["macro_f1"],
                     "encoder_lr": encoder_lr_used,
@@ -559,6 +574,12 @@ def main() -> int:
                 tracker.log_metrics(
                     {
                         "train_loss": row["train_loss"],
+                        "train_classification_loss": row[
+                            "train_classification_loss"
+                        ],
+                        "train_attention_regularization": row[
+                            "train_attention_regularization"
+                        ],
                         "validation_loss": row["validation_loss"],
                         "validation_macro_f1": row["validation_macro_f1"],
                         "peak_gpu_memory_allocated_gb": peak_allocated_gpu_gb,

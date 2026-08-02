@@ -2,7 +2,11 @@ import pytest
 import torch
 from torch import nn
 
-from src.research_mil import GatedAttentionMILClassifier, summarize_attention
+from src.research_mil import (
+    GatedAttentionMILClassifier,
+    normalized_attention_kl_to_uniform,
+    summarize_attention,
+)
 
 
 class MeanChannelEncoder(nn.Module):
@@ -78,6 +82,22 @@ def test_attention_summary_excludes_single_image_bags_from_collapse_rate():
     assert result["single_image_patients"] == 1
     assert result["multi_image_patients"] == 2
     assert result["multi_image_collapse_rate"] == 0.5
+
+
+def test_normalized_attention_kl_is_zero_for_uniform_and_single_bags():
+    weights = torch.tensor([[0.5, 0.5], [1.0, 0.0]])
+    mask = torch.tensor([[True, True], [True, False]])
+
+    assert normalized_attention_kl_to_uniform(weights, mask).item() == 0.0
+
+
+def test_normalized_attention_kl_approaches_one_for_concentrated_bag():
+    weights = torch.tensor([[0.999999, 0.000001]])
+    mask = torch.tensor([[True, True]])
+
+    penalty = normalized_attention_kl_to_uniform(weights, mask)
+
+    assert 0.9999 < penalty.item() <= 1.0
 
 
 def test_attention_summary_rejects_non_normalized_weights():

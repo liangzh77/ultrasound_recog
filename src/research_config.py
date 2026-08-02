@@ -37,11 +37,11 @@ def load_research_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("Research config must be a mapping")
-    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2"}:
+    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2", "E2R"}:
         raise ValueError("Unsupported patient image experiment code")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi"}[
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi"}[
         config["experiment_code"]
     ]
     if config["input_mode"] != expected_mode:
@@ -58,6 +58,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E1": "letterbox",
         "E1S": "stretch",
         "E2": "letterbox",
+        "E2R": "letterbox",
     }[config["experiment_code"]]
     if data.get("resize_mode") != expected_resize:
         raise ValueError("Experiment code and resize_mode do not match")
@@ -76,7 +77,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
     aggregation = model.get("aggregation", "mean_probability")
     expected_aggregation = (
         "gated_attention"
-        if config["experiment_code"] == "E2"
+        if config["experiment_code"] in {"E2", "E2R"}
         else "mean_probability"
     )
     if aggregation != expected_aggregation:
@@ -90,6 +91,13 @@ def load_research_config(path: Path) -> dict[str, Any]:
             raise ValueError("attention_collapse_threshold must be in (0, 1]")
         if not 0 <= max_collapse_rate <= 1:
             raise ValueError("max_multi_image_collapse_rate must be in [0, 1]")
+    attention_kl_weight = float(training.get("attention_kl_weight", 0.0))
+    expected_kl_weight = 0.05 if config["experiment_code"] == "E2R" else 0.0
+    if attention_kl_weight != expected_kl_weight:
+        raise ValueError(
+            f"{config['experiment_code']} attention_kl_weight must be "
+            f"{expected_kl_weight}"
+        )
     if int(training.get("max_epochs", 0)) > 60:
         raise ValueError("max_epochs cannot exceed 60")
     if int(training.get("pilot_epochs", 0)) > 5:

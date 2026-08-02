@@ -103,6 +103,23 @@ def test_e2_changes_only_patient_aggregation_from_e1():
     assert comparable_e1 == comparable_e2
 
 
+def test_e2r_changes_only_preregistered_attention_regularization_from_e2():
+    e2 = load_research_config(
+        ROOT / "configs/research/e2_roi_gated_attention_b2.yaml"
+    )
+    e2r = load_research_config(
+        ROOT / "configs/research/e2r_roi_gated_attention_entropy_b2.yaml"
+    )
+    comparable_e2 = deepcopy(e2)
+    comparable_e2r = deepcopy(e2r)
+    comparable_e2.pop("experiment_code")
+    comparable_e2r.pop("experiment_code")
+    comparable_e2["training"]["attention_kl_weight"] = 0.05
+
+    assert e2r["training"]["attention_kl_weight"] == 0.05
+    assert comparable_e2 == comparable_e2r
+
+
 def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):
     weights = tmp_path / "weights.bin"
     weights.write_bytes(b"known weights")

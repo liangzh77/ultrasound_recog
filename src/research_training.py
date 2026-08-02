@@ -15,6 +15,8 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import WeightedRandomSampler
 
+from src.research_mil import normalized_attention_kl_to_uniform
+
 
 def seed_everything(seed: int) -> None:
     random.seed(seed)
@@ -111,9 +113,12 @@ def run_patient_epoch(
     scaler: torch.amp.GradScaler | None = None,
     instance_chunk_size: int | None = None,
     collect_attention: bool = False,
+    attention_kl_weight: float = 0.0,
 ) -> dict[str, Any]:
     if accumulation_steps < 1:
         raise ValueError("accumulation_steps must be positive")
+    if attention_kl_weight < 0:
+        raise ValueError("attention_kl_weight cannot be negative")
     training = optimizer is not None
     model.train(training)
     batches = list(loader) if not hasattr(loader, "__len__") else loader
@@ -126,6 +131,8 @@ def run_patient_epoch(
         optimizer.zero_grad(set_to_none=True)
 
     total_loss = 0.0
+    total_classification_loss = 0.0
+    total_attention_regularization = 0.0
     total_patients = 0
     all_probabilities = []
     all_targets = []
@@ -143,7 +150,21 @@ def run_patient_epoch(
             enabled=amp_enabled,
         ):
             outputs = model(images, mask, instance_chunk_size=instance_chunk_size)
-            loss = F.nll_loss(outputs["patient_log_probabilities"], targets)
+            classification_loss = F.nll_loss(
+                outputs["patient_log_probabilities"], targets
+            )
+            attention_regularization = classification_loss.new_zeros(())
+            if attention_kl_weight:
+                if "attention_weights" not in outputs:
+                    raise ValueError(
+                        "attention_kl_weight requires a model with attention weights"
+                    )
+                attention_regularization = normalized_attention_kl_to_uniform(
+                    outputs["attention_weights"], mask
+                )
+            loss = classification_loss + (
+                attention_kl_weight * attention_regularization
+            )
         if training:
             remainder = batch_count % accumulation_steps
             in_final_partial_group = remainder and batch_index >= batch_count - remainder
@@ -162,6 +183,12 @@ def run_patient_epoch(
 
         patient_count = int(targets.shape[0])
         total_loss += float(loss.detach()) * patient_count
+        total_classification_loss += (
+            float(classification_loss.detach()) * patient_count
+        )
+        total_attention_regularization += (
+            float(attention_regularization.detach()) * patient_count
+        )
         total_patients += patient_count
         all_probabilities.append(outputs["patient_probabilities"].detach().cpu())
         all_targets.append(targets.detach().cpu())
@@ -187,6 +214,10 @@ def run_patient_epoch(
     result = {
         "prediction_level": "patient",
         "loss": total_loss / total_patients,
+        "classification_loss": total_classification_loss / total_patients,
+        "attention_regularization": (
+            total_attention_regularization / total_patients
+        ),
         "probabilities": torch.cat(all_probabilities),
         "targets": torch.cat(all_targets),
         "person_keys": all_person_keys,
