@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T20:30:00+08:00
+updated_at: 2026-08-02T20:50:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -145,3 +145,41 @@ experiments:
     failure_or_negative_reason: not_applicable_pipeline_passed_score_not_used_for_selection
     conclusion: 资源合同通过，允许启动E1-S正式五折
     next_step: E1-S folds 0至4正式训练并合并OOF
+
+  - id: E1S-fivefold-formal
+    kind: formal_model_in_progress
+    status: in_progress_fold_0_of_5_complete
+    research_question: 去除letterbox显式长宽比后，ROI患者内平均的性能和类别安全性是否保持
+    preregistered_gate: OOF macro-F1不低于E1超过0.02且任一类别灵敏度不下降超过0.05
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 0a1116da5d37153feb96820465e0b009003dff43
+    config:
+      path: configs/research/e1s_roi_stretch_mean_b2.yaml
+      source: working_tree_at_commit
+      sha256: 81591aaf818c95ec5c1278bf6428f5f5ab34535f5c74974d793125268420cae3
+    command: python tools/26_train_patient_image_mean.py --config configs/research/e1s_roi_stretch_mean_b2.yaml --fold FOLD
+    folds: [0]
+    seeds: [20260724]
+    planned_folds: [0, 1, 2, 3, 4]
+    planned_seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours_by_fold: [0.2789947129]
+    peak_allocated_gpu_gb_by_fold: [1.2451777458]
+    fold_status: [EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold0.csv
+      sha256: 901b1a470b6bb7a921a4f7bff056f612aebcd14fd37bc3fbee9acd0f1b4197f1
+    results:
+      fold_0_macro_f1: 0.1740522976
+      fold_0_accuracy: 0.1958762887
+      fold_0_macro_auc: 0.6724011029
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold0-seed20260724-formal_summary.json
+      evaluation_sha256: af36452df9458f44409bf6bb28703abcd1c807535c88088a5d2bcfd043cb83dd
+      merged_ci: not_available_until_fivefold_complete
+    mlflow_parent_run_ids: [7af38a691c6146c2890a7698c761c005]
+    mlflow_fold_run_ids: [eacf5a04a00c41a589204c5e672d611d]
+    markdown_report: docs/research/logs/2026-08-02.md
+    failure_or_negative_reason: fold_0单折macro-F1低于E1对应折0.0345；单折不能提前停止或选择
+    conclusion: 仅完成1折，禁止作总体效果结论
+    next_step: 运行fold_1并继续逐折登记

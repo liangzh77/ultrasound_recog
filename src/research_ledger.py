@@ -39,6 +39,7 @@ FORMAL_MODEL_REQUIRED = {
     "peak_allocated_gpu_gb_by_fold",
     "fold_status",
 }
+FORMAL_MODEL_KINDS = {"formal_model", "formal_model_in_progress"}
 FORBIDDEN_PATH_FRAGMENTS = (
     "workspace/data/raw/",
     "workspace\\data\\raw\\",
@@ -107,7 +108,7 @@ def validate_experiment_record(
     verify_artifacts: bool,
 ) -> None:
     missing = sorted(COMMON_REQUIRED - set(record))
-    if record.get("kind") == "formal_model":
+    if record.get("kind") in FORMAL_MODEL_KINDS:
         missing.extend(sorted(FORMAL_MODEL_REQUIRED - set(record)))
     if missing:
         raise ValueError(f"Experiment {record.get('id')} missing fields: {', '.join(missing)}")
@@ -115,7 +116,7 @@ def validate_experiment_record(
     _validate_hash(str(record["data_fingerprint"]), "data_fingerprint")
     if not record["folds"] or not record["seeds"]:
         raise ValueError("folds and seeds must be non-empty")
-    if record.get("kind") in {"formal_model", "resource_pilot"} and len(
+    if record.get("kind") in {*FORMAL_MODEL_KINDS, "resource_pilot"} and len(
         record["folds"]
     ) != len(record["seeds"]):
         raise ValueError("Model folds and seeds must have equal length")
@@ -143,7 +144,7 @@ def validate_experiment_record(
             if observed != str(config["sha256"]):
                 raise ValueError(f"Config SHA-256 mismatch for {record['id']}")
 
-    if record.get("kind") == "formal_model":
+    if record.get("kind") in FORMAL_MODEL_KINDS:
         oof = record["oof"]
         if not isinstance(oof, Mapping) or not {"path", "sha256"} <= set(oof):
             raise ValueError("Formal model oof must contain path and sha256")
@@ -188,5 +189,5 @@ def validate_research_ledger(
     return {
         "study_id": ledger["study_id"],
         "experiments": len(experiments),
-        "formal_models": sum(record["kind"] == "formal_model" for record in experiments),
+        "formal_models": sum(record["kind"] in FORMAL_MODEL_KINDS for record in experiments),
     }
