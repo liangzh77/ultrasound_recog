@@ -10,7 +10,7 @@ mlflow:
 experiments:
   - id: E3-preregistration
     kind: formal_study_preregistration
-    status: preregistered_implementation_verified
+    status: resource_pilot_passed_formal_pending
     research_question: E2的患者级性能增益是否主要来自患者级端到端训练，而不需要可学习且会塌缩的attention权重
     preregistered_gate: 资源pilot为5 epochs小于1小时、峰值显存不超过9GB且外层test不迭代；正式OOF macro-F1不低于0.3463、相对E1至少+0.01且配对CI下界大于0、至少4/5折高于E1、任一类别F1较E2下降不超过0.05、ECE不高于0.4519且Brier不高于1.0291
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -35,7 +35,42 @@ experiments:
     markdown_report: docs/project/E3_均值特征池化实验预登记_2026-08-02.md
     failure_or_negative_reason: not_applicable_results_unknown
     conclusion: 方法、配置和门槛已在结果未知时冻结；尚未形成模型结论
-    next_step: 文档审计和提交后运行fold 0固定5 epoch资源pilot
+    next_step: 资源pilot已通过；文档审计和提交后运行正式fold 0
+
+  - id: E3-fold0-pilot
+    kind: resource_pilot
+    status: completed_pipeline_only
+    research_question: E3均值特征池化能否在本机资源限制内稳定训练且不迭代外层测试
+    preregistered_gate: 5 epochs小于1小时、峰值显存不超过9GB、外层test不迭代、无NaN或溢出；pilot分数不用于模型选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: cd9bf0087faa66f52c4ba3294b74ea241c892c69
+    config:
+      path: configs/research/e3_roi_mean_feature_b2.yaml
+      source: git_blob_at_commit
+      sha256: 7266d6b1d114dda209bc0af83d22a21eb61661fed7ec38dbf27f696e137c94ac
+    command: python tools/33_train_patient_mean_feature.py --config configs/research/e3_roi_mean_feature_b2.yaml --fold 0 --pilot
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime: 0.1040452637 hours for 5 epochs
+    oof: not_applicable_outer_test_not_iterated
+    results:
+      epochs_completed: 5
+      best_validation_macro_f1_pipeline_only: 0.2418073841
+      peak_allocated_gpu_gb: 1.2451786995
+      peak_reserved_gpu_gb: 1.3496093750
+      outer_test_iterated: false
+      checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E3/fold_0/best_pilot.pt
+      checkpoint_sha256: beb1d14c8a331d2209e804d3dd6d127d19bb1c39499e0938b1823d3cc2284d0e
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E3-fold0-seed20260724-pilot_summary.json
+      summary_sha256: 0cc9885d87f09ecb73ab17bccedd6786eb0e99578100c3349be50be70b57324d
+    mlflow_parent_run_ids: [0441786fd2704f4c84df6d5784de67f1]
+    mlflow_fold_run_ids: [7b9e991bd4f64928ba30040a226265b5]
+    markdown_report: docs/project/E3_均值特征池化实验预登记_2026-08-02.md
+    failure_or_negative_reason: none; pilot score excluded from selection
+    conclusion: 时间、显存、数值稳定和外层隔离门槛全部通过，允许启动正式固定五折
+    next_step: 提交pilot登记后运行E3正式fold 0
 
   - id: C0-C4-preregistration
     kind: formal_study_preregistration
