@@ -1,0 +1,126 @@
+schema_version: 0
+status: draft_unconfirmed
+study: knee_annotation_review_confirmation_s1a
+provenance:
+  study_id: knee_patient_multimodal_v1_20260724
+  dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+  annotation_version: annotations_62ecb01c4d77
+  source_git_commit: 112459ecf7d413345df161d0104e11be4d84ca1c
+  source_workbook_sha256: b0247dc30cbd75a3403baeff9e8475ab1a5063fd4826801cce0afb43f3b6aab2
+  completed_workbook_sha256: null
+medical_decisions:
+  Q1:
+    topic: 滑膜
+    status: pending
+    allowed_options: [synovial_hypertrophy, anatomy_and_abnormal_mixed, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q2:
+    topic: 滑膜血流
+    status: pending
+    allowed_options: [pd_synovial_only, pd_cd_separate_synovial_only, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q3:
+    topic: 结晶
+    status: pending
+    allowed_options: [split_omeract_like, single_crystal_class, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q4:
+    topic: 软骨
+    status: pending
+    allowed_options: [normal_structure, cartilage_damage, split_structure_damage, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q5:
+    topic: 骨皮质
+    status: pending
+    allowed_options: [anatomy_surface_only, includes_cortical_abnormality, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q6:
+    topic: 囊肿与滑囊层级
+    status: pending
+    allowed_options: [hierarchy_with_subtypes, all_independent, single_merged_class, other]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q7:
+    topic: 旧标注穷尽性
+    status: pending
+    allowed_options: [all_28_exhaustive, positive_only, per_target_scope, unknown]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+  Q8:
+    topic: 诊断盲法复核
+    status: pending
+    allowed_options: [fully_blinded, partially_blinded, not_blinded]
+    selected_option: null
+    operational_definition: null
+    decision_reason: null
+review_parameters:
+  P1:
+    parameter: total_review_images
+    status: pending
+    recommended_value: 400
+    final_value: null
+    decision_reason: null
+  P2:
+    parameter: independent_reviewers_per_image
+    status: pending
+    recommended_value: 2
+    final_value: null
+    decision_reason: null
+  P3:
+    parameter: double_review_fraction
+    status: pending
+    recommended_value: 1.0
+    final_value: null
+    decision_reason: null
+  P4:
+    parameter: adjudicate_every_core_disagreement
+    status: pending
+    recommended_value: true
+    final_value: null
+    decision_reason: null
+  P5:
+    parameter: minimum_raw_presence_agreement
+    status: pending
+    recommended_value: 0.80
+    final_value: null
+    decision_reason: null
+  P6:
+    parameter: minimum_binary_positive_agreement
+    status: pending
+    recommended_value: 0.85
+    final_value: null
+    decision_reason: null
+  P7:
+    parameter: minimum_presence_kappa
+    status: pending
+    recommended_value: 0.60
+    final_value: null
+    decision_reason: null
+  P8:
+    parameter: bootstrap_and_gate_basis
+    status: pending
+    recommended_value:
+      bootstrap_samples: 2000
+      ci_level: 0.95
+      gate_basis: point_estimate
+    final_value: null
+    decision_reason: null
+signoffs:
+  clinical_role: null
+  clinical_confirmation_present: false
+  research_role: null
+  research_confirmation_present: false
+  confirmation_date: null
+deviation_decision_reference: null
