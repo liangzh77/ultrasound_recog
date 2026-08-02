@@ -198,6 +198,9 @@ class ReviewQueueEntryWindow(QMainWindow):
             combo.currentIndexChanged.connect(self._mark_dirty)
             self._combos[field] = combo
             fields.addRow(f"{FIELD_LABELS[field]}：", combo)
+        self._combos["presence_state"].currentIndexChanged.connect(
+            self._refresh_subtype_for_presence
+        )
         form_layout.addLayout(fields)
         notes_label = QLabel("备注（不得填写姓名或路径）：")
         self._notes = QPlainTextEdit()
@@ -255,6 +258,41 @@ class ReviewQueueEntryWindow(QMainWindow):
         index = combo.findData(code)
         combo.setCurrentIndex(index if index >= 0 else 0)
 
+    def _subtype_values_for_presence(self, target: str, presence: str) -> list[str]:
+        values = list(self._config["review_fields"]["subtype_by_target"][target])
+        if presence in {"absent_visible", "not_in_view"}:
+            return ["not_applicable"]
+        if presence == "uncertain":
+            return [value for value in values if value in {"uncertain", "not_applicable"}]
+        if presence == "present":
+            return [value for value in values if value != "not_applicable"]
+        return values
+
+    def _refresh_subtype_for_presence(self, *_args) -> None:
+        if "subtype" not in self._combos or not self._rows:
+            return
+        target = str(self._rows[self._index]["target_category"])
+        presence = str(self._combos["presence_state"].currentData() or "")
+        subtype_combo = self._combos["subtype"]
+        previous = str(subtype_combo.currentData() or "")
+        was_loading = self._loading_form
+        self._loading_form = True
+        try:
+            values = self._subtype_values_for_presence(target, presence)
+            self._set_options(subtype_combo, values)
+            if previous in values:
+                self._select_code(subtype_combo, previous)
+            elif len(values) == 1:
+                self._select_code(subtype_combo, values[0])
+        finally:
+            self._loading_form = was_loading
+        subtype_combo.setEnabled(
+            self._confirm.isEnabled()
+            and presence not in {"absent_visible", "not_in_view"}
+        )
+        if not was_loading:
+            self._mark_dirty()
+
     def _load_form(self, row: Mapping[str, Any]) -> None:
         self._loading_form = True
         try:
@@ -265,10 +303,14 @@ class ReviewQueueEntryWindow(QMainWindow):
             self._set_options(
                 self._combos["subtype"], list(fields["subtype_by_target"][target])
             )
-            for field in REQUIRED_SEMANTIC_FIELDS:
+            for field in ("presence_state", "image_mode", "annotation_scope"):
                 self._select_code(
                     self._combos[field], str(row[f"{self._prefix}_{field}"])
                 )
+            self._refresh_subtype_for_presence()
+            self._select_code(
+                self._combos["subtype"], str(row[f"{self._prefix}_subtype"])
+            )
             self._notes.setPlainText(str(row[f"{self._prefix}_notes"]))
             self._dirty = False
         finally:
@@ -286,6 +328,9 @@ class ReviewQueueEntryWindow(QMainWindow):
     def _set_entry_enabled(self, enabled: bool) -> None:
         for combo in self._combos.values():
             combo.setEnabled(enabled)
+        presence = str(self._combos["presence_state"].currentData() or "")
+        if presence in {"absent_visible", "not_in_view"}:
+            self._combos["subtype"].setEnabled(False)
         self._notes.setEnabled(enabled)
         self._confirm.setEnabled(enabled)
 

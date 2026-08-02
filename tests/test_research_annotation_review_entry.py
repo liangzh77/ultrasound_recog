@@ -6,7 +6,9 @@ import pytest
 from src.research_annotation_review import PUBLIC_REVIEW_FIELDS
 from src.research_annotation_review_entry import (
     merge_independent_reviewer_rows,
+    new_adjudication_rows,
     new_reviewer_response_rows,
+    validate_adjudication_rows,
     validate_formal_entry_config,
     validate_reviewer_response_rows,
     write_response_csv_atomic,
@@ -149,6 +151,7 @@ def test_two_complete_isolated_responses_merge_without_adjudication():
         new_reviewer_response_rows(_blank_queue(), _config(), 2), 2
     )
     reviewer_2[0]["reviewer_2_presence_state"] = "absent_visible"
+    reviewer_2[0]["reviewer_2_subtype"] = "not_applicable"
 
     merged = merge_independent_reviewer_rows(reviewer_1, reviewer_2, _config())
 
@@ -168,3 +171,66 @@ def test_atomic_csv_writer_preserves_stable_public_schema(tmp_path):
         assert tuple(reader.fieldnames or ()) == PUBLIC_REVIEW_FIELDS
         assert list(reader)[0]["review_case_key"] == "KNEE_REVIEW_TEST"
     assert not (tmp_path / ".response.csv.tmp").exists()
+
+
+def _merged_disagreement():
+    reviewer_1 = _complete(
+        new_reviewer_response_rows(_blank_queue(), _config(), 1), 1
+    )
+    reviewer_2 = _complete(
+        new_reviewer_response_rows(_blank_queue(), _config(), 2), 2
+    )
+    reviewer_2[0]["reviewer_2_presence_state"] = "absent_visible"
+    reviewer_2[0]["reviewer_2_subtype"] = "not_applicable"
+    return merge_independent_reviewer_rows(reviewer_1, reviewer_2, _config())
+
+
+def test_adjudication_requires_only_disagreed_fields_and_notes():
+    rows = new_adjudication_rows(_merged_disagreement(), _config())
+    progress = validate_adjudication_rows(rows, _config(), require_complete=False)
+    assert progress["disagreement_rows"] == 1
+    assert progress["remaining_rows"] == 1
+
+    rows[0]["adjudicated_presence_state"] = "present"
+    rows[0]["adjudicated_subtype"] = "joint_effusion"
+    rows[0]["adjudication_notes"] = "consensus discussion"
+    result = validate_adjudication_rows(rows, _config(), require_complete=True)
+    assert result["completed_rows"] == 1
+
+
+def test_adjudication_cannot_override_agreement_or_submit_geometry():
+    rows = new_adjudication_rows(_merged_disagreement(), _config())
+    rows[0]["adjudicated_image_mode"] = "PD"
+    with pytest.raises(ValueError, match="cannot override"):
+        validate_adjudication_rows(rows, _config(), require_complete=False)
+
+    rows[0]["adjudicated_image_mode"] = ""
+    rows[0]["adjudicated_polygon_action"] = "adjust"
+    with pytest.raises(ValueError, match="cannot submit polygon"):
+        validate_adjudication_rows(rows, _config(), require_complete=False)
+
+
+def test_new_adjudication_rejects_prior_adjudication_values():
+    rows = _merged_disagreement()
+    rows[0]["adjudicated_presence_state"] = "present"
+
+    with pytest.raises(ValueError, match="unadjudicated"):
+        new_adjudication_rows(rows, _config())
+
+
+def test_response_rejects_presence_subtype_contradiction():
+    rows = _complete(new_reviewer_response_rows(_blank_queue(), _config(), 1), 1)
+    rows[0]["reviewer_1_presence_state"] = "absent_visible"
+
+    with pytest.raises(ValueError, match="not_applicable subtype"):
+        validate_reviewer_response_rows(rows, _config(), 1, require_complete=True)
+
+
+def test_adjudication_rejects_final_presence_subtype_contradiction():
+    rows = new_adjudication_rows(_merged_disagreement(), _config())
+    rows[0]["adjudicated_presence_state"] = "absent_visible"
+    rows[0]["adjudicated_subtype"] = "joint_effusion"
+    rows[0]["adjudication_notes"] = "consensus discussion"
+
+    with pytest.raises(ValueError, match="not_applicable subtype"):
+        validate_adjudication_rows(rows, _config(), require_complete=True)

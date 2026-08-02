@@ -204,6 +204,23 @@ def test_entry_window_refuses_unfrozen_config(tmp_path):
         _window(tmp_path, config=config)
 
 
+def test_presence_selection_constrains_subtype_options(tmp_path):
+    app, window, _saved = _window(tmp_path)
+    try:
+        _select(window, "presence_state", "absent_visible")
+        app.processEvents()
+        subtype = window._combos["subtype"]
+        assert subtype.currentData() == "not_applicable"
+        assert not subtype.isEnabled()
+
+        _select(window, "presence_state", "present")
+        app.processEvents()
+        assert subtype.findData("not_applicable") < 0
+        assert subtype.isEnabled()
+    finally:
+        window.close()
+
+
 def test_entry_window_disables_form_when_roi_cannot_load(tmp_path):
     app = QApplication.instance() or QApplication([])
     config = _config()

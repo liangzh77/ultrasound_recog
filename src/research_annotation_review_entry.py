@@ -29,6 +29,13 @@ REQUIRED_SEMANTIC_FIELDS = (
     "annotation_scope",
     "subtype",
 )
+ADJUDICATED_VALUE_FIELDS = (
+    "presence_state",
+    "image_mode",
+    "annotation_scope",
+    "polygon_action",
+    "subtype",
+)
 BASE_FIELDS = (
     "review_case_key",
     "image_key",
@@ -123,6 +130,15 @@ def _allowed_values(config: Mapping[str, Any], target: str) -> dict[str, set[str
     }
 
 
+def _validate_presence_subtype(presence: str, subtype: str) -> None:
+    if presence == "present" and subtype == "not_applicable":
+        raise ValueError("Present response requires a target subtype")
+    if presence in {"absent_visible", "not_in_view"} and subtype != "not_applicable":
+        raise ValueError("Absent or out-of-view response requires not_applicable subtype")
+    if presence == "uncertain" and subtype not in {"uncertain", "not_applicable"}:
+        raise ValueError("Uncertain response requires uncertain or not_applicable subtype")
+
+
 def new_reviewer_response_rows(
     queue_rows: Iterable[Mapping[str, Any]],
     config: Mapping[str, Any],
@@ -203,6 +219,9 @@ def validate_reviewer_response_rows(
         if started and not semantic_complete:
             partial += 1
         elif semantic_complete:
+            _validate_presence_subtype(
+                values["presence_state"], values["subtype"]
+            )
             complete += 1
         if require_complete and not semantic_complete:
             raise ValueError("Independent response is incomplete")
@@ -245,6 +264,109 @@ def merge_independent_reviewer_rows(
             row[f"reviewer_2_{field}"] = _clean(right_row[f"reviewer_2_{field}"])
         merged.append(row)
     return merged
+
+
+def validate_adjudication_rows(
+    rows: Iterable[Mapping[str, Any]],
+    config: Mapping[str, Any],
+    *,
+    require_complete: bool,
+) -> dict[str, Any]:
+    """Validate a merged or partially adjudicated S1a semantic response."""
+    validate_formal_entry_config(config)
+    records = [dict(row) for row in rows]
+    validate_review_template(records, set(config["review_targets"]))
+    if len(records) != int(config["frozen_provenance"]["queue_rows"]):
+        raise ValueError("Adjudication row count differs from frozen provenance")
+    completed = 0
+    disagreement_rows = 0
+    disagreement_fields = 0
+    for row in records:
+        target = _clean(row["target_category"])
+        allowed = _allowed_values(config, target)
+        for slot in (1, 2):
+            prefix = reviewer_prefix(slot)
+            for field in REQUIRED_SEMANTIC_FIELDS:
+                if _clean(row[f"{prefix}_{field}"]) not in allowed[field]:
+                    raise ValueError("Merged response contains an invalid reviewer value")
+            if _clean(row[f"{prefix}_polygon_action"]) != "not_applicable":
+                raise ValueError("Merged S1a response contains polygon actions")
+            _validate_presence_subtype(
+                _clean(row[f"{prefix}_presence_state"]),
+                _clean(row[f"{prefix}_subtype"]),
+            )
+
+        disagreements = [
+            field
+            for field in REQUIRED_SEMANTIC_FIELDS
+            if _clean(row[f"reviewer_1_{field}"])
+            != _clean(row[f"reviewer_2_{field}"])
+        ]
+        disagreement_fields += len(disagreements)
+        if disagreements:
+            disagreement_rows += 1
+        row_complete = True
+        for field in REQUIRED_SEMANTIC_FIELDS:
+            adjudicated = _clean(row[f"adjudicated_{field}"])
+            if field in disagreements:
+                if adjudicated and adjudicated not in allowed[field]:
+                    raise ValueError("Adjudication contains an invalid coded value")
+                if not adjudicated:
+                    row_complete = False
+            elif adjudicated:
+                raise ValueError("Adjudication cannot override an agreed reviewer value")
+        if _clean(row["adjudicated_polygon_action"]):
+            raise ValueError("S1a adjudication cannot submit polygon actions")
+        notes = _clean(row["adjudication_notes"])
+        if disagreements and not notes:
+            row_complete = False
+        if not disagreements and notes:
+            raise ValueError("Adjudication notes require a reviewer disagreement")
+        if row_complete:
+            final_presence = (
+                _clean(row["adjudicated_presence_state"])
+                if "presence_state" in disagreements
+                else _clean(row["reviewer_1_presence_state"])
+            )
+            final_subtype = (
+                _clean(row["adjudicated_subtype"])
+                if "subtype" in disagreements
+                else _clean(row["reviewer_1_subtype"])
+            )
+            _validate_presence_subtype(final_presence, final_subtype)
+            completed += 1
+        if require_complete and not row_complete:
+            raise ValueError("Blinded adjudication is incomplete")
+    return {
+        "status": (
+            "complete_blinded_adjudication_validated"
+            if require_complete
+            else "blinded_adjudication_progress_validated"
+        ),
+        "rows": len(records),
+        "completed_rows": completed,
+        "remaining_rows": len(records) - completed,
+        "disagreement_rows": disagreement_rows,
+        "disagreement_fields": disagreement_fields,
+        "agreed_values_overridden": False,
+        "diagnosis_or_legacy_annotation_present": False,
+        "geometry_values_present": False,
+    }
+
+
+def new_adjudication_rows(
+    merged_rows: Iterable[Mapping[str, Any]],
+    config: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    """Create a blank adjudication response from a complete merged review."""
+    records = [
+        {field: _clean(row.get(field)) for field in PUBLIC_REVIEW_FIELDS}
+        for row in merged_rows
+    ]
+    validate_adjudication_rows(records, config, require_complete=False)
+    if any(_clean(row[field]) for row in records for field in ADJUDICATION_FIELDS):
+        raise ValueError("New adjudication requires an unadjudicated merged response")
+    return records
 
 
 def write_response_csv_atomic(path: Path, rows: list[Mapping[str, Any]]) -> None:
