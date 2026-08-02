@@ -12,6 +12,7 @@ workspace/experiments/*/*/artifacts/**
 !workspace/experiments/*/*/artifacts/
 !workspace/experiments/*/*/artifacts/README.md
 assets/pretrained/
+outputs/
 
 # 临时文件
 nul
