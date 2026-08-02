@@ -10,5 +10,6 @@ pillow
 scikit-learn
 matplotlib
 seaborn
+shapely>=2.0
 tqdm
 gradio>=4.0

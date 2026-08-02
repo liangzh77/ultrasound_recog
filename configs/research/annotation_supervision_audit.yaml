@@ -1,0 +1,47 @@
+study: annotation_supervision_audit_v1
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+expected_categories: 28
+support_thresholds:
+  robust_min_patients: 50
+  robust_min_patients_per_fold: 5
+  limited_min_patients: 20
+  limited_min_patients_per_fold: 2
+diagnosis_concentration_thresholds: [0.80, 0.95]
+manual_presence_proxy:
+  model: balanced_multinomial_logistic_regression
+  C: 1.0
+  max_iter: 2000
+  folds: [0, 1, 2, 3, 4]
+  seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+  high_separability_macro_f1: 0.20
+  high_separability_macro_auc: 0.65
+category_roles:
+  内侧副韧带: anatomy
+  内侧半月板: anatomy
+  半月板囊肿: finding
+  半膜肌: anatomy
+  半膜肌腱: anatomy
+  囊肿: finding
+  外侧副韧带: anatomy
+  滑膜: ambiguous
+  滑膜囊肿: finding
+  滑膜血流: finding
+  痛风石: finding
+  积液: finding
+  结晶: finding
+  股二头肌腱: anatomy
+  股四头肌腱: anatomy
+  腘窝囊肿: finding
+  软骨: anatomy
+  骨侵蚀: finding
+  骨皮质: anatomy
+  骨赘: finding
+  髂胫束: anatomy
+  髌下深囊炎: finding
+  髌前浅筋膜: anatomy
+  髌前血肿: finding
+  髌韧带: anatomy
+  鹅足腱: anatomy
+  鹅足腱滑囊: ambiguous
+  鹅足腱滑囊炎: finding
