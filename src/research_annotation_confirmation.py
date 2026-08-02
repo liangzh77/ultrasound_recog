@@ -103,6 +103,12 @@ SIGNOFF_FIELDS = {
     "research_confirmation_present",
     "confirmation_date",
 }
+ALLOWED_CLINICAL_ROLES = {
+    "musculoskeletal_ultrasound_clinician",
+    "rheumatologist_with_ultrasound_experience",
+    "dual_clinical_panel",
+}
+ALLOWED_RESEARCH_ROLES = {"study_lead", "methodology_lead", "dual_research_review"}
 FORBIDDEN_KEY_FRAGMENTS = (
     "patient_name",
     "person_key",
@@ -344,6 +350,7 @@ def validate_completed_confirmation(
     expected_annotation_version: str,
     expected_source_workbook_sha256: str,
     expected_completed_workbook_sha256: str,
+    deviation_reference_verified: bool = False,
 ) -> dict[str, Any]:
     """Validate completed decisions and report whether the current code can freeze them."""
     _validate_structure(
@@ -361,6 +368,8 @@ def validate_completed_confirmation(
         raise ValueError("Completed workbook SHA-256 does not match the returned file")
     if not SHA256.fullmatch(expected_completed_workbook_sha256):
         raise ValueError("Expected completed workbook SHA-256 is invalid")
+    if expected_completed_workbook_sha256 == expected_source_workbook_sha256:
+        raise ValueError("Completed workbook must differ from the blank source workbook")
 
     selections = {}
     for question_id, decision in payload["medical_decisions"].items():
@@ -385,12 +394,12 @@ def validate_completed_confirmation(
     parameter_values = _validate_parameter_values(payload["review_parameters"])
 
     signoffs = payload["signoffs"]
-    if not _clean(signoffs["clinical_role"]):
-        raise ValueError("Clinical signoff role is required")
+    if signoffs["clinical_role"] not in ALLOWED_CLINICAL_ROLES:
+        raise ValueError("Clinical signoff role is invalid")
     if signoffs["clinical_confirmation_present"] is not True:
         raise ValueError("Clinical confirmation signoff is required")
-    if not _clean(signoffs["research_role"]):
-        raise ValueError("Research signoff role is required")
+    if signoffs["research_role"] not in ALLOWED_RESEARCH_ROLES:
+        raise ValueError("Research signoff role is invalid")
     if signoffs["research_confirmation_present"] is not True:
         raise ValueError("Research confirmation signoff is required")
     _validate_confirmation_date(signoffs["confirmation_date"])
@@ -422,7 +431,9 @@ def validate_completed_confirmation(
         contract_changes.append("P8_requires_CI_lower_bound_gate")
 
     deviation_reference = payload["deviation_decision_reference"]
-    missing_deviation_adr = bool(deviations and not deviation_reference)
+    missing_deviation_adr = bool(
+        deviations and (not deviation_reference or not deviation_reference_verified)
+    )
     ready = not contract_changes and not missing_deviation_adr
     result = {
         "status": "completed_confirmation_validated",
@@ -432,6 +443,7 @@ def validate_completed_confirmation(
         "selected_options": selections,
         "method_deviations_from_recommendation": deviations,
         "deviation_decision_reference": deviation_reference,
+        "deviation_reference_verified": deviation_reference_verified,
         "missing_deviation_adr": missing_deviation_adr,
         "contract_changes_required": contract_changes,
         "ready_for_preregistration": ready,

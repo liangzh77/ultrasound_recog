@@ -44,9 +44,9 @@ def _completed():
         parameter["final_value"] = deepcopy(parameter["recommended_value"])
         parameter["decision_reason"] = "accepted before review"
     payload["signoffs"] = {
-        "clinical_role": "musculoskeletal ultrasound clinician",
+        "clinical_role": "musculoskeletal_ultrasound_clinician",
         "clinical_confirmation_present": True,
-        "research_role": "study lead",
+        "research_role": "study_lead",
         "research_confirmation_present": True,
         "confirmation_date": "2026-08-03",
     }
@@ -148,6 +148,7 @@ def test_deviation_requires_adr_before_preregistration():
     result = validate_completed_confirmation(
         payload,
         expected_completed_workbook_sha256="1" * 64,
+        deviation_reference_verified=True,
         **_expected(payload),
     )
     assert result["missing_deviation_adr"] is False
@@ -166,6 +167,18 @@ def test_process_parameter_ranges_are_validated():
         )
 
 
+def test_signoffs_accept_role_codes_not_names():
+    payload = _completed()
+    payload["signoffs"]["clinical_role"] = "Dr Zhang"
+
+    with pytest.raises(ValueError, match="Clinical signoff role is invalid"):
+        validate_completed_confirmation(
+            payload,
+            expected_completed_workbook_sha256="1" * 64,
+            **_expected(payload),
+        )
+
+
 def test_completed_confirmation_binds_the_returned_workbook_hash():
     payload = _completed()
 
@@ -173,6 +186,19 @@ def test_completed_confirmation_binds_the_returned_workbook_hash():
         validate_completed_confirmation(
             payload,
             expected_completed_workbook_sha256="2" * 64,
+            **_expected(payload),
+        )
+
+
+def test_completed_confirmation_rejects_the_unchanged_blank_workbook():
+    payload = _completed()
+    source_sha = payload["provenance"]["source_workbook_sha256"]
+    payload["provenance"]["completed_workbook_sha256"] = source_sha
+
+    with pytest.raises(ValueError, match="must differ from the blank source"):
+        validate_completed_confirmation(
+            payload,
+            expected_completed_workbook_sha256=source_sha,
             **_expected(payload),
         )
 
