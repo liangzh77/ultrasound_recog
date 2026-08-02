@@ -504,12 +504,12 @@ experiments:
 
   - id: E2R-fivefold-formal
     kind: formal_model_in_progress
-    status: in_progress_folds_0_to_3_of_5_complete
+    status: fivefold_complete_pending_pooled_evaluation
     research_question: 固定系数0.05的归一化注意力KL正则能否消除E2系统性塌缩并保留患者级分类收益
     preregistered_gate: pooled塌缩率不超过0.50；macro-F1不低于0.3463且比E1高至少0.01；至少3/5折高于E1；每类F1较E2下降不超过0.05；ECE不高于0.4519且Brier不高于1.0291
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
     git_commit: 0a7205b53cb787432193dd0da9efe2be6dfb093e
-    git_commits_by_attempt: [204f184, cbcdc16, 21440c9, 7996c0e]
+    git_commits_by_attempt: [204f184, cbcdc16, 21440c9, 7996c0e, 6d5099f]
     config:
       path: configs/research/e2r_roi_gated_attention_entropy_b2.yaml
       source: git_blob_at_commit
@@ -519,10 +519,10 @@ experiments:
     seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
     hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
-    runtime_hours_by_fold: [0.3979045947, 0.4735205033, 0.3361888007, 0.5763248611]
-    peak_allocated_gpu_gb_by_fold: [1.2578058243, 1.2568864822, 1.2554216385, 1.2589101791]
-    peak_reserved_gpu_gb_by_fold: [1.3593750000, 1.4023437500, 1.3984375000, 1.3671875000]
-    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    runtime_hours_by_fold: [0.3979045947, 0.4735205033, 0.3361888007, 0.5763248611, 0.3631229047]
+    peak_allocated_gpu_gb_by_fold: [1.2578058243, 1.2568864822, 1.2554216385, 1.2589101791, 1.2578058243]
+    peak_reserved_gpu_gb_by_fold: [1.3593750000, 1.4023437500, 1.3984375000, 1.3671875000, 1.3593750000]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
     oof:
       path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_fold0.csv
       sha256: 8f4f94a645f604e06db6838c7550e3f6990128291b222b62fa7044aa065f5447
@@ -536,6 +536,9 @@ experiments:
       - fold: 3
         path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_fold3.csv
         sha256: 4ee8c3ecf8ec0b681d690e724c6d809fd5d4226017b264dcdebe3a15b3dfdc09
+      - fold: 4
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_fold4.csv
+        sha256: 202bf86ae47ba3f0794bd3184e461ccc97e8a7d3daef3d919270194e1ea6446f
     results:
       attention_kl_weight: 0.05
       e2_reference_macro_f1: 0.3663369214
@@ -610,10 +613,27 @@ experiments:
       fold_3_attention_sha256: 2c2010c27119d525abe850a58c81360b4c00ee0a6ac4e411cb1addee920cdd64
       fold_3_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2R/fold_3/best_formal.pt
       fold_3_weight_sha256: b5f58f202b49df3c62631ab9a063669644725a7fa7bb5fa6a7e1e075dde21c88
-      merged_ci: not_available_until_fivefold_complete
-    mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc, b7b024e4636f4b05b88749df17de9352, 487bee1b033244039bb5fd88c9df46d8, 7b37973966d74f38a3ef17169cfa81ab]
-    mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c, 86d69d5eb3ad4e6992add48af394956b, 52f4822e9976497ebaa4f3b1ea746cb5, 671870a93d2e487daf29ad6a4c1db38c]
+      fold_4_patients: 193
+      fold_4_images: 927
+      fold_4_macro_f1: 0.3252553376
+      fold_4_delta_vs_E1_macro_f1: 0.1715458173
+      fold_4_delta_vs_E2_macro_f1: -0.0945010245
+      fold_4_accuracy: 0.4300518135
+      fold_4_macro_auc: 0.6809232119
+      fold_4_multiclass_brier: 0.7665403622
+      fold_4_ece: 0.1953728526
+      fold_4_attention_multi_image_collapse_rate: 0.2263157895
+      fold_4_attention_gate_passed: true
+      fold_4_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E2R-fold4-seed20260728-formal_summary.json
+      fold_4_summary_sha256: c1862735b5348f863be7955d0e9daf09d7e7492ce8ed9762ec45db98d994bdc1
+      fold_4_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/E2R_fold4.csv
+      fold_4_attention_sha256: d0f20b391539e8f7af36b080d069cb041a79763cc0605cc8dade8379159982eb
+      fold_4_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2R/fold_4/best_formal.pt
+      fold_4_weight_sha256: dc76f8172b0cfa30ed22f6cdfc347d289e5d7b3e422995dc153da466fc11b1a5
+      merged_ci: pending_pooled_evaluation
+    mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc, b7b024e4636f4b05b88749df17de9352, 487bee1b033244039bb5fd88c9df46d8, 7b37973966d74f38a3ef17169cfa81ab, 749e67ef30354e2da3a29455f1327e11]
+    mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c, 86d69d5eb3ad4e6992add48af394956b, 52f4822e9976497ebaa4f3b1ea746cb5, 671870a93d2e487daf29ad6a4c1db38c, 6674386e3f17423fbc1f9da99e1617da]
     markdown_report: docs/decisions/ADR-005-E2性能门槛通过但注意力塌缩后启动单次熵正则补救.md
-    failure_or_negative_reason: fold 1/2注意力塌缩率0.6316/0.7090超过0.50，fold 1/3校准门槛失败；fold 2首次启动因内存不足被拒绝且已在资源恢复后原样完成；第二正则强度仍被禁止
-    conclusion: 前四折性能均高于E1；fold 0/3注意力通过、fold 1/2失败，尚不作总体晋级结论
-    next_step: 提交fold 3登记后运行正式fold 4，再合并OOF执行全部预登记门槛
+    failure_or_negative_reason: fold 1/2注意力塌缩率0.6316/0.7090超过0.50，fold 1/3校准门槛失败，fold 4较E2同折低0.0945；fold 2启动失败亦保留；第二正则强度仍被禁止
+    conclusion: 五折均高于E1；注意力门槛3折通过、2折失败，但正式结论必须等待pooled OOF、CI和每类安全审计
+    next_step: 合并五折OOF，分别与E1/E2作配对评估，并运行pooled注意力审计
