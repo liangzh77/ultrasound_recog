@@ -197,6 +197,39 @@ def bootstrap_macro_f1_ci(
     return float(low), _macro_f1(targets, probabilities), float(high)
 
 
+def _macro_auc(targets: np.ndarray, probabilities: np.ndarray) -> float:
+    auc_values = []
+    for class_id in range(probabilities.shape[1]):
+        binary_targets = (targets == class_id).astype(np.int64)
+        if np.unique(binary_targets).size < 2:
+            continue
+        auc_values.append(roc_auc_score(binary_targets, probabilities[:, class_id]))
+    if not auc_values:
+        raise ValueError("Macro AUC requires at least one evaluable class")
+    return float(np.mean(auc_values))
+
+
+def bootstrap_macro_auc_ci(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    n_bootstrap: int,
+    seed: int,
+) -> tuple[float, float, float]:
+    """Return a stratified patient bootstrap interval for one-vs-rest macro AUC."""
+    targets = np.asarray(targets, dtype=np.int64)
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    generator = np.random.default_rng(seed)
+    samples = [
+        _macro_auc(targets[indices], probabilities[indices])
+        for indices in (
+            _stratified_bootstrap_indices(targets, generator)
+            for _ in range(n_bootstrap)
+        )
+    ]
+    low, high = np.percentile(samples, (2.5, 97.5))
+    return float(low), _macro_auc(targets, probabilities), float(high)
+
+
 def paired_bootstrap_macro_f1(
     targets: np.ndarray,
     baseline_probabilities: np.ndarray,

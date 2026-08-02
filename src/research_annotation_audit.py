@@ -11,7 +11,11 @@ from shapely import make_valid
 from shapely.geometry import Polygon
 
 from src.label_mapping import get_disease_from_label
-from src.research_metrics import compute_patient_metrics
+from src.research_metrics import (
+    bootstrap_macro_auc_ci,
+    bootstrap_macro_f1_ci,
+    compute_patient_metrics,
+)
 from src.research_schema import DIAGNOSIS_CLASSES
 
 
@@ -288,6 +292,8 @@ def evaluate_manual_presence_proxy(
     patient_labels: Mapping[str, set[str]],
     categories: list[str],
     category_roles: Mapping[str, str],
+    bootstrap_samples: int = 2_000,
+    bootstrap_seed: int = 20260724,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Cross-fit diagnosis from manual label presence as a workflow-bias audit."""
     from sklearn.linear_model import LogisticRegression
@@ -330,10 +336,23 @@ def evaluate_manual_presence_proxy(
                 )["macro_f1"]
             )
         metrics = compute_patient_metrics(y, probabilities, DIAGNOSIS_CLASSES)
+        f1_interval = bootstrap_macro_f1_ci(
+            y, probabilities, bootstrap_samples, bootstrap_seed
+        )
+        auc_interval = bootstrap_macro_auc_ci(
+            y, probabilities, bootstrap_samples, bootstrap_seed
+        )
         result[group] = {
             "feature_count": len(group_categories),
             "metrics": metrics,
             "fold_macro_f1": fold_macro_f1,
+            "confidence_intervals": {
+                "method": "patient_stratified_bootstrap_percentile",
+                "samples": bootstrap_samples,
+                "seed": bootstrap_seed,
+                "macro_f1_ci95": [f1_interval[0], f1_interval[2]],
+                "macro_auc_ci95": [auc_interval[0], auc_interval[2]],
+            },
         }
         all_oof[group] = probabilities
 

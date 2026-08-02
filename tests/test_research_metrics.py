@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from src.research_metrics import (
+    bootstrap_macro_auc_ci,
     bootstrap_macro_f1_ci,
     compute_patient_metrics,
     paired_bootstrap_macro_f1,
@@ -82,6 +83,25 @@ def test_bootstrap_confidence_interval_is_reproducible():
 
     first = bootstrap_macro_f1_ci(targets, probabilities, 100, seed=17)
     second = bootstrap_macro_f1_ci(targets, probabilities, 100, seed=17)
+
+    assert first == second
+
+
+def test_macro_auc_bootstrap_confidence_interval_is_reproducible():
+    targets = np.asarray([0, 0, 1, 1, 2, 2])
+    probabilities = np.asarray(
+        [
+            [0.8, 0.1, 0.1],
+            [0.6, 0.3, 0.1],
+            [0.2, 0.7, 0.1],
+            [0.1, 0.8, 0.1],
+            [0.1, 0.2, 0.7],
+            [0.2, 0.1, 0.7],
+        ]
+    )
+
+    first = bootstrap_macro_auc_ci(targets, probabilities, 20, seed=17)
+    second = bootstrap_macro_auc_ci(targets, probabilities, 20, seed=17)
 
     assert first == second
     assert first[0] <= first[1] <= first[2]
