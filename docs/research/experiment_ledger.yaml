@@ -503,8 +503,8 @@ experiments:
     next_step: 提交pilot登记后运行E2-R正式fold 0
 
   - id: E2R-fivefold-formal
-    kind: formal_model_in_progress
-    status: fivefold_complete_pending_pooled_evaluation
+    kind: formal_model
+    status: completed_gate_failed
     research_question: 固定系数0.05的归一化注意力KL正则能否消除E2系统性塌缩并保留患者级分类收益
     preregistered_gate: pooled塌缩率不超过0.50；macro-F1不低于0.3463且比E1高至少0.01；至少3/5折高于E1；每类F1较E2下降不超过0.05；ECE不高于0.4519且Brier不高于1.0291
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -630,10 +630,34 @@ experiments:
       fold_4_attention_sha256: d0f20b391539e8f7af36b080d069cb041a79763cc0605cc8dade8379159982eb
       fold_4_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E2R/fold_4/best_formal.pt
       fold_4_weight_sha256: dc76f8172b0cfa30ed22f6cdfc347d289e5d7b3e422995dc153da466fc11b1a5
-      merged_ci: pending_pooled_evaluation
+      macro_f1: 0.3622892690
+      macro_f1_ci95: [0.3329945460, 0.3908380348]
+      accuracy: 0.3877973113
+      macro_auc: 0.6896459124
+      multiclass_brier: 0.9239493055
+      ece: 0.3640948672
+      paired_delta_vs_E1_macro_f1: 0.1467723540
+      paired_delta_vs_E1_ci95: [0.1109688545, 0.1828405589]
+      paired_delta_vs_E2_macro_f1: -0.0040476524
+      paired_delta_vs_E2_ci95: [-0.0347741498, 0.0265758005]
+      folds_direction_better_than_E1: 5
+      pooled_attention_multi_image_patients: 943
+      pooled_attention_collapse_rate: 0.3679745493
+      attention_gate_passed: true
+      worst_class_f1_delta_vs_E2: -0.0862525424
+      worst_class_name: 痛风性关节炎
+      class_safety_gate_passed: false
+      merged_oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_oof.csv
+      merged_oof_sha256: 2264a88203d1efbda613bc21f5d5fa935f60edd50a4bdd96b1d1bef4cafa50f1
+      evaluation_vs_E1_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_vs_E1_oof_evaluation.json
+      evaluation_vs_E1_sha256: 3589a8334c587a3f7dfb388551e0e474342b513f594b2e41e76f1216d5271404
+      evaluation_vs_E2_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E2R_vs_E2_oof_evaluation.json
+      evaluation_vs_E2_sha256: c01066e3ed73e3bc904836b777f54d7a8cb4976c5791f1b5e10b70b63209f561
+      attention_audit_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/E2R_attention_oof_audit.json
+      attention_audit_sha256: 9a05cfb1909442834e9681c16c0dbf7aaf9b9d6a4b724e13290bd584341a41f1
     mlflow_parent_run_ids: [0171e98f6fdc46609f8832d7fed5fbdc, b7b024e4636f4b05b88749df17de9352, 487bee1b033244039bb5fd88c9df46d8, 7b37973966d74f38a3ef17169cfa81ab, 749e67ef30354e2da3a29455f1327e11]
     mlflow_fold_run_ids: [282161a71cda4b2ab957984fcb330b4c, 86d69d5eb3ad4e6992add48af394956b, 52f4822e9976497ebaa4f3b1ea746cb5, 671870a93d2e487daf29ad6a4c1db38c, 6674386e3f17423fbc1f9da99e1617da]
-    markdown_report: docs/decisions/ADR-005-E2性能门槛通过但注意力塌缩后启动单次熵正则补救.md
-    failure_or_negative_reason: fold 1/2注意力塌缩率0.6316/0.7090超过0.50，fold 1/3校准门槛失败，fold 4较E2同折低0.0945；fold 2启动失败亦保留；第二正则强度仍被禁止
-    conclusion: 五折均高于E1；注意力门槛3折通过、2折失败，但正式结论必须等待pooled OOF、CI和每类安全审计
-    next_step: 合并五折OOF，分别与E1/E2作配对评估，并运行pooled注意力审计
+    markdown_report: docs/project/E2R_注意力熵正则补救五折结果_2026-08-02.md
+    failure_or_negative_reason: pooled注意力、总体性能和校准通过，但痛风/损伤F1较E2下降0.0863/0.0696，超过预登记0.05；fold 1/2注意力失败和fold 2启动失败亦保留
+    conclusion: E2-R总体门槛失败，不进入图像主模型候选；检查点A2以当前无合格图像主模型关闭
+    next_step: 按ADR-006停止Attention MIL补救，不运行第二强度；继续不依赖图像模型的C0-C4临床字段治理和临床单模态基线
