@@ -34,6 +34,7 @@ from src.research_runtime import (  # noqa: E402
     evaluate_training_start,
     set_below_normal_priority,
 )
+from src.research_ledger import sha256_file  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -167,7 +168,8 @@ def _write_predictions(path: Path, result, outer_fold: int, model_id: str) -> No
 
 def main() -> int:
     args = parse_args()
-    config = load_research_config(args.config.resolve())
+    config_path = args.config.resolve()
+    config = load_research_config(config_path)
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -275,12 +277,17 @@ def main() -> int:
         "dataset_version": source_freeze["dataset_version_short"],
         "git_revision": revision,
         "git_dirty": dirty,
+        "config_path": config_path.relative_to(ROOT).as_posix(),
+        "config_sha256": sha256_file(config_path),
         "pretrained_sha256": config["model"]["pretrained_sha256"],
         "split_counts": split_counts,
         "outer_test_used_for_training_or_early_stopping": False,
         "resource_start": asdict(start_snapshot),
         "resource_start_decision": asdict(start_decision),
         "gpu": gpu,
+        "mlflow_database": (
+            PATIENT_MULTIMODAL_EXPERIMENT_DIR / "tracking" / "mlflow.db"
+        ).relative_to(ROOT).as_posix(),
     }
     print(json.dumps(run_contract, ensure_ascii=False, indent=2))
     if args.dry_run:
@@ -414,7 +421,8 @@ def main() -> int:
             "git_dirty": dirty,
             "pilot": args.pilot,
         },
-    ):
+    ) as parent_run:
+        run_contract["mlflow_parent_run_id"] = parent_run.info.run_id
         with tracker.fold_run(
             f"{run_id}-child",
             {
@@ -425,7 +433,8 @@ def main() -> int:
                 "patients_validation": split_counts["validation"]["patients"],
                 "patients_test": split_counts["test"]["patients"],
             },
-        ):
+        ) as fold_run:
+            run_contract["mlflow_fold_run_id"] = fold_run.info.run_id
             for epoch in range(first_epoch, epochs):
                 bag_datasets["train"].set_epoch(epoch)
                 sampler.generator.manual_seed(seed + epoch)
@@ -555,6 +564,7 @@ def main() -> int:
                         torch.cuda.max_memory_reserved() / (1024**3)
                     ),
                     "outer_test_iterated": False,
+                    "stop_reason": stop_status,
                 }
             elif best_path.is_file():
                 best = torch.load(best_path, map_location="cuda", weights_only=False)
@@ -578,6 +588,7 @@ def main() -> int:
                     / f"{code}_fold{args.fold}.csv"
                 )
                 _write_predictions(prediction_path, test_result, args.fold, run_id)
+                prediction_relative = prediction_path.relative_to(ROOT).as_posix()
                 summary = {
                     **run_contract,
                     "status": stop_status,
@@ -587,6 +598,16 @@ def main() -> int:
                     "test_metrics": test_metrics,
                     "outer_test_iterated": True,
                     "prediction_file": prediction_path.name,
+                    "prediction_path": prediction_relative,
+                    "prediction_sha256": sha256_file(prediction_path),
+                    "elapsed_hours": (time.monotonic() - started) / 3600,
+                    "peak_gpu_memory_allocated_gb": (
+                        torch.cuda.max_memory_allocated() / (1024**3)
+                    ),
+                    "peak_gpu_memory_reserved_gb": (
+                        torch.cuda.max_memory_reserved() / (1024**3)
+                    ),
+                    "stop_reason": stop_status,
                 }
             else:
                 raise RuntimeError("No best checkpoint was produced")
