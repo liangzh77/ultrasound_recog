@@ -23,7 +23,7 @@ def _config():
             "clinical_confirmation_report_sha256": "b" * 64,
             "queue_sha256": "c" * 64,
             "queue_rows": 1,
-            "preregistration_git_commit": "d" * 40,
+            "review_workflow_git_commit": "d" * 40,
         },
         "required_independent_reviews": 2,
         "selection": {

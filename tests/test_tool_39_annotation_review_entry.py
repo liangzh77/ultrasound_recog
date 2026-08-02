@@ -30,7 +30,7 @@ def _config():
             "clinical_confirmation_report_sha256": "b" * 64,
             "queue_sha256": "b" * 64,
             "queue_rows": 1,
-            "preregistration_git_commit": "c" * 40,
+            "review_workflow_git_commit": "c" * 40,
         },
         "required_independent_reviews": 2,
         "selection": {
@@ -97,7 +97,9 @@ def test_session_save_writes_hash_bound_privacy_manifest(tmp_path, monkeypatch):
     output = tmp_path / "annotation_review_reviewer_1_response.csv"
 
     monkeypatch.setattr(
-        TOOL, "_git_state", lambda: {"commit": "c" * 40, "dirty": False}
+        TOOL,
+        "_validate_runtime_git",
+        lambda _commit: {"commit": "e" * 40, "dirty": False},
     )
     manifest = TOOL._save_session(
         output,
@@ -122,7 +124,9 @@ def test_resume_manifest_fails_after_response_tampering(tmp_path, monkeypatch):
     rows = new_reviewer_response_rows(_queue(), config, 1)
     output = tmp_path / "annotation_review_reviewer_1_response.csv"
     monkeypatch.setattr(
-        TOOL, "_git_state", lambda: {"commit": "c" * 40, "dirty": False}
+        TOOL,
+        "_validate_runtime_git",
+        lambda _commit: {"commit": "e" * 40, "dirty": False},
     )
     TOOL._save_session(
         output, rows, config, 1, "a" * 64, "b" * 64, time.perf_counter()
@@ -139,7 +143,11 @@ def test_session_save_rejects_dirty_or_wrong_git(tmp_path, monkeypatch):
     rows = new_reviewer_response_rows(_queue(), config, 1)
     output = tmp_path / "annotation_review_reviewer_1_response.csv"
     monkeypatch.setattr(
-        TOOL, "_git_state", lambda: {"commit": "c" * 40, "dirty": True}
+        TOOL,
+        "_validate_runtime_git",
+        lambda _commit: (_ for _ in ()).throw(
+            ValueError("Formal review runtime Git must be clean")
+        ),
     )
 
     with pytest.raises(ValueError, match="runtime Git"):

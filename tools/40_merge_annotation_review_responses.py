@@ -27,6 +27,12 @@ from src.research_ledger import sha256_file  # noqa: E402
 
 REVIEW_DIR = PATIENT_MULTIMODAL_REPORTS_DIR / "annotation_review"
 DEFAULT_CONFIG = ROOT / "configs/research/annotation_review_queue_v0.yaml"
+RUNTIME_CODE_PATHS = (
+    "src/research_annotation_review.py",
+    "src/research_annotation_agreement.py",
+    "src/research_annotation_review_entry.py",
+    "tools/40_merge_annotation_review_responses.py",
+)
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -90,6 +96,20 @@ def _git_state() -> dict[str, Any]:
     return {"commit": commit, "dirty": dirty}
 
 
+def _validate_runtime_git(expected_code_commit: str) -> dict[str, Any]:
+    state = _git_state()
+    if state["dirty"]:
+        raise ValueError("Merge runtime Git must be clean")
+    comparison = subprocess.run(
+        ["git", "diff", "--quiet", expected_code_commit, "--", *RUNTIME_CODE_PATHS],
+        cwd=ROOT,
+        check=False,
+    )
+    if comparison.returncode != 0:
+        raise ValueError("Merge code differs from the frozen workflow Git")
+    return state
+
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     try:
@@ -133,11 +153,9 @@ def main() -> int:
         raise ValueError("Merge config must use a controlled project artifact")
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     validate_formal_entry_config(config)
-    git_state = _git_state()
-    if git_state["dirty"] or git_state["commit"] != config["frozen_provenance"][
-        "preregistration_git_commit"
-    ]:
-        raise ValueError("Merge runtime Git differs from preregistration")
+    git_state = _validate_runtime_git(
+        config["frozen_provenance"]["review_workflow_git_commit"]
+    )
     config_sha256 = sha256_file(config_path)
     reviewer_1_path = _controlled_path(
         args.reviewer_1, "annotation_review_reviewer_1_response.csv"

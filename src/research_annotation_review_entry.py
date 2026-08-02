@@ -72,10 +72,8 @@ def validate_formal_entry_config(config: Mapping[str, Any]) -> dict[str, Any]:
     queue_rows = provenance.get("queue_rows")
     if isinstance(queue_rows, bool) or not isinstance(queue_rows, int) or queue_rows < 1:
         raise ValueError("Formal review queue row count is not frozen")
-    if not GIT_COMMIT.fullmatch(
-        _clean(provenance.get("preregistration_git_commit"))
-    ):
-        raise ValueError("Formal review preregistration Git commit is not frozen")
+    if not GIT_COMMIT.fullmatch(_clean(provenance.get("review_workflow_git_commit"))):
+        raise ValueError("Formal review workflow Git commit is not frozen")
     if int(config.get("required_independent_reviews", 0)) != 2:
         raise ValueError("Formal S1a entry currently requires exactly two reviewers")
     selection = config.get("selection", {})
@@ -107,7 +105,7 @@ def validate_formal_entry_config(config: Mapping[str, Any]) -> dict[str, Any]:
         "geometry_reliability_stage": "S1b",
         "queue_sha256": provenance["queue_sha256"],
         "queue_rows": queue_rows,
-        "preregistration_git_commit": provenance["preregistration_git_commit"],
+        "review_workflow_git_commit": provenance["review_workflow_git_commit"],
     }
 
 

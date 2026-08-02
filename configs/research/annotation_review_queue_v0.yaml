@@ -8,7 +8,7 @@ frozen_provenance:
   clinical_confirmation_report_sha256: pending_clinical_confirmation
   queue_sha256: pending_clinical_confirmation
   queue_rows: pending_clinical_confirmation
-  preregistration_git_commit: pending_clinical_confirmation
+  review_workflow_git_commit: pending_clinical_confirmation
 seed: 20260802
 required_independent_reviews: 2
 agreement:

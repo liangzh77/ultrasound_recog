@@ -46,6 +46,14 @@ from src.research_runtime import set_below_normal_priority  # noqa: E402
 REVIEW_DIR = PATIENT_MULTIMODAL_REPORTS_DIR / "annotation_review"
 DEFAULT_CONFIG = ROOT / "configs/research/annotation_review_queue_v0.yaml"
 DEFAULT_QUEUE = REVIEW_DIR / "annotation_review_queue_draft.csv"
+RUNTIME_CODE_PATHS = (
+    "src/research_annotation_review.py",
+    "src/research_annotation_agreement.py",
+    "src/research_annotation_review_entry.py",
+    "src/research_annotation_review_entry_ui.py",
+    "src/research_annotation_review_ui.py",
+    "tools/39_run_annotation_review_entry.py",
+)
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -71,6 +79,20 @@ def _git_state() -> dict[str, Any]:
         ).stdout.strip()
     )
     return {"commit": commit, "dirty": dirty}
+
+
+def _validate_runtime_git(expected_code_commit: str) -> dict[str, Any]:
+    state = _git_state()
+    if state["dirty"]:
+        raise ValueError("Formal review runtime Git must be clean")
+    comparison = subprocess.run(
+        ["git", "diff", "--quiet", expected_code_commit, "--", *RUNTIME_CODE_PATHS],
+        cwd=ROOT,
+        check=False,
+    )
+    if comparison.returncode != 0:
+        raise ValueError("Formal review code differs from the frozen workflow Git")
+    return state
 
 
 def _controlled_response_path(requested: Path | None, slot: int) -> Path:
@@ -138,11 +160,9 @@ def _save_session(
     progress = validate_reviewer_response_rows(
         rows, config, slot, require_complete=False
     )
-    git_state = _git_state()
-    if git_state["dirty"] or git_state["commit"] != config["frozen_provenance"][
-        "preregistration_git_commit"
-    ]:
-        raise ValueError("Formal review runtime Git differs from preregistration")
+    git_state = _validate_runtime_git(
+        config["frozen_provenance"]["review_workflow_git_commit"]
+    )
     write_response_csv_atomic(response_path, rows)
     manifest = {
         "schema_version": 1,
@@ -204,11 +224,7 @@ def main() -> int:
     queue_sha256 = sha256_file(queue_path)
     if queue_sha256 != config["frozen_provenance"]["queue_sha256"]:
         raise ValueError("Formal review queue hash differs from frozen provenance")
-    runtime_git = _git_state()
-    if runtime_git["dirty"] or runtime_git["commit"] != config[
-        "frozen_provenance"
-    ]["preregistration_git_commit"]:
-        raise ValueError("Formal review runtime Git differs from preregistration")
+    _validate_runtime_git(config["frozen_provenance"]["review_workflow_git_commit"])
     queue_rows = _read_csv(queue_path)
 
     if response_path.exists():
