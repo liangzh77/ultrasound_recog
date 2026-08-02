@@ -173,14 +173,14 @@ def _require_exact_fields(record: Mapping[str, Any], expected: set[str], label: 
         raise ValueError(f"{label} fields differ from the frozen contract")
 
 
-def _equivalent_decision(left: Any, right: Any) -> bool:
+def decisions_equivalent(left: Any, right: Any) -> bool:
     if isinstance(left, bool) or isinstance(right, bool):
         return type(left) is type(right) and left == right
     if isinstance(left, (int, float)) and isinstance(right, (int, float)):
         return float(left) == float(right)
     if isinstance(left, Mapping) and isinstance(right, Mapping):
         return set(left) == set(right) and all(
-            _equivalent_decision(left[key], right[key]) for key in left
+            decisions_equivalent(left[key], right[key]) for key in left
         )
     return type(left) is type(right) and left == right
 
@@ -237,7 +237,7 @@ def _validate_structure(
         _require_exact_fields(parameter, PARAMETER_FIELDS, parameter_id)
         if parameter["parameter"] != name:
             raise ValueError(f"{parameter_id} name differs from the frozen contract")
-        if not _equivalent_decision(parameter["recommended_value"], recommended):
+        if not decisions_equivalent(parameter["recommended_value"], recommended):
             raise ValueError(f"{parameter_id} recommendation differs from the frozen contract")
 
     _require_exact_fields(payload["signoffs"], SIGNOFF_FIELDS, "Signoffs")
@@ -410,7 +410,7 @@ def validate_completed_confirmation(
         if selected != RECOMMENDED_MEDICAL_OPTIONS[question_id]
     ]
     for parameter_id, (_, recommended) in EXPECTED_PARAMETERS.items():
-        if not _equivalent_decision(parameter_values[parameter_id], recommended):
+        if not decisions_equivalent(parameter_values[parameter_id], recommended):
             deviations.append(parameter_id)
 
     contract_changes = []
