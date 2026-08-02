@@ -1,0 +1,147 @@
+schema_version: 1
+study_id: knee_patient_multimodal_v1_20260724
+updated_at: 2026-08-02T20:30:00+08:00
+privacy: deidentified_keys_only
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+mlflow:
+  experiment: patient-primary-diagnosis
+  database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
+
+experiments:
+  - id: E0-fivefold-formal
+    kind: formal_model
+    status: completed_negative
+    research_question: 整图逐图softmax后患者内平均能达到什么患者级六分类性能
+    preregistered_gate: 作为ROI对照，不按自身分数晋级；检查非医学背景捷径
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 5290f269b7a26a3bc8b60b62602fa4d576bdbe84
+    config:
+      path: configs/research/e0_full_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 5c18636f7e8d1e75f8fae128851660dd14a48f13225108a1914cfc0a1e2579ea
+    command: python tools/26_train_patient_image_mean.py --config configs/research/e0_full_mean_b2.yaml --fold FOLD
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours_by_fold: [0.33, 0.43, 0.39, 0.35, 0.31]
+    peak_allocated_gpu_gb_by_fold: [1.25, 1.24, 1.25, 1.25, 1.25]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E0_oof.csv
+      sha256: 8a0c0cb26b2211a6b59f78fa9d8b4e9c888f1f4f65cb90d3cd6ce8dceb247ee9
+    results:
+      macro_f1: 0.2013762877
+      macro_f1_95_ci: [0.1736635789, 0.2286993352]
+      accuracy: 0.2430196484
+      macro_auc: 0.6045177776
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E0_oof_evaluation.json
+      evaluation_sha256: 2b4f967d60873a25103ab023d787f89cf9e994afb2ad3658073f6ddf2f90b0ae
+    mlflow_parent_run_ids:
+      - 89de0a57279046cb979e6918141f97cb
+      - c149325405ed4054acaa5b7458fd7164
+      - 21ffa7b408344f699f2fbe90f00f4338
+      - 7e892e533d094cd18bccc8b076fab051
+      - 4ae2b142f26e4ef4bf4ca929c1338d45
+    markdown_report: docs/project/E0_E1整图与ROI五折基线结果_2026-08-02.md
+    failure_or_negative_reason: 正常类OOF灵敏度为0；后续代理审计证明整图外部背景可高风险预测诊断
+    conclusion: 排除出最终主模型候选，仅保留为风险对照
+    next_step: 使用ROI并完成几何敏感性审计
+
+  - id: E1-fivefold-formal
+    kind: formal_model
+    status: completed_gate_failed
+    research_question: 只读取人工确认ROI是否优于整图患者内平均基线
+    preregistered_gate: macro-F1不低于E0超过0.02且任一类别灵敏度不下降超过0.05
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 5290f269b7a26a3bc8b60b62602fa4d576bdbe84
+    config:
+      path: configs/research/e1_roi_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 0b2b8e943a70e0d4e5c8c607680319cbb5a521fb269e1ab355f37ba141415644
+    command: python tools/26_train_patient_image_mean.py --config configs/research/e1_roi_mean_b2.yaml --fold FOLD
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours_by_fold: [0.32, 0.33, 0.35, 0.21, 0.43]
+    peak_allocated_gpu_gb_by_fold: [1.25, 1.24, 1.25, 1.25, 1.25]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_oof.csv
+      sha256: a2bb7c9ea2f56dc7de8f29cebc175441cf6b7a1832684730033def86cb72aeac
+    results:
+      macro_f1: 0.2155169150
+      macro_f1_95_ci: [0.1911684772, 0.2389034923]
+      accuracy: 0.2905894519
+      macro_auc: 0.5925054304
+      paired_delta_vs_e0: 0.0141406272
+      paired_delta_95_ci: [-0.0203165435, 0.0484502327]
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_vs_E0_oof_evaluation.json
+      evaluation_sha256: 1626d203737ef32a88df907e97274de337a5654445489d4228e5fd7c911956c9
+    mlflow_parent_run_ids:
+      - 0aade85d1894494ab8440c83b4396312
+      - a798a7e24e3b421e94c667c4ff48c71d
+      - 5ccd766801f143c5a2f7d5d178111cfe
+      - 13e0bfe2cced472ab4b6b8f9c6f673bc
+      - 94532eab217b4d92bece862e84798d8c
+    markdown_report: docs/project/E0_E1整图与ROI五折基线结果_2026-08-02.md
+    failure_or_negative_reason: SPA灵敏度下降0.2447、损伤下降0.0845，未通过类别安全门槛；ROI长宽比存在代理风险
+    conclusion: 不直接冻结letterbox ROI，追加一次E1-S几何敏感性消融
+    next_step: E1-S正式五折
+
+  - id: nonmedical-proxy-audit
+    kind: formal_audit
+    status: completed_failed
+    research_question: 非医学采集、导出、几何和边框代理是否能单独预测主要诊断
+    preregistered_gate: 高风险定义为置换p小于等于0.05且macro-F1大于等于0.20或macro-AUC大于等于0.65
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 177fdf0
+    configuration: 5折; seed 20260724; 100次折内分层置换; 2000次患者bootstrap; 固定代理组
+    command: python tools/27_audit_nonmedical_proxies.py --permutations 100 --bootstrap 2000
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724]
+    pretrained_sha256: not_applicable_linear_proxy_audit
+    hardware: Intel i5-10400; 32GB RAM; 低优先级CPU进程
+    runtime: 正式全组约342秒；严格模型可见组约199秒
+    oof: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/*_oof.csv
+    results:
+      full_visible_nonmedical_macro_f1: 0.3983
+      roi_aspect_visible_macro_f1: 0.2100
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/model_visible_proxy_audit.json
+      report_sha256: 380fdc2b2c669ef6c8a5a56278aaf531728d388ac60ac42c4fbf9c121a8f5118
+    mlflow_parent_run_ids: not_applicable_audit_uses_json_oof
+    markdown_report: docs/project/非医学采集与导出代理审计_2026-08-02.md
+    failure_or_negative_reason: 审计未通过；非医学代理性能超过E0/E1图像模型
+    conclusion: 排除整图主模型，禁止ROI扩边，追加E1-S
+    next_step: 完成E1-S并关闭检查点A1
+
+  - id: E1S-fold0-pilot
+    kind: resource_pilot
+    status: completed_pipeline_only
+    research_question: 固定正方形拉伸ROI训练管线是否满足本机资源和外层隔离合同
+    preregistered_gate: 5 epochs小于1小时、峰值显存小于9GB、外层测试不迭代
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: ced169362d6b15f1e89b6320ea20da2bb44c0d45
+    config:
+      path: configs/research/e1s_roi_stretch_mean_b2.yaml
+      source: working_tree_at_commit
+      sha256: 81591aaf818c95ec5c1278bf6428f5f5ab34535f5c74974d793125268420cae3
+    command: python tools/26_train_patient_image_mean.py --config configs/research/e1s_roi_stretch_mean_b2.yaml --fold 0 --pilot --pilot-epochs 5
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
+    runtime_hours: 0.1025626845
+    peak_allocated_gpu_gb: 1.2451777458
+    outer_test_iterated: false
+    oof: not_applicable_resource_pilot
+    results:
+      best_validation_macro_f1: 0.1965480024
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold0-seed20260724-pilot_summary.json
+      summary_sha256: b1137e0283818817104241967ac7db8f9b9531419210035e8a4269b7fea5edc7
+    mlflow_parent_run_ids: [cd11c46570e44c3ab98ad9560d61c766]
+    markdown_report: docs/research/logs/2026-08-02.md
+    failure_or_negative_reason: not_applicable_pipeline_passed_score_not_used_for_selection
+    conclusion: 资源合同通过，允许启动E1-S正式五折
+    next_step: E1-S folds 0至4正式训练并合并OOF

@@ -95,6 +95,9 @@ tools/26_train_patient_image_mean.py
 
 ## 文档入口
 
+- 患者级诊断研究主索引：
+  `docs/research/README.md`
+  — 持续索引数据版本、ADR、阶段报告、实验登记、日期日志、MLflow与本地OOF产物；正式实验缺少哈希或阴性结果记录时不得标记完成。
 - 项目级文档与日志：
   `docs/project/`
 - 标注工具定位与启动说明：
