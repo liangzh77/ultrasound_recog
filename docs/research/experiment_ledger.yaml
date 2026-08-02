@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T22:10:00+08:00
+updated_at: 2026-08-02T22:45:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -147,8 +147,8 @@ experiments:
     next_step: E1-S folds 0至4正式训练并合并OOF
 
   - id: E1S-fivefold-formal
-    kind: formal_model_in_progress
-    status: in_progress_fold_3_of_5_complete
+    kind: formal_model
+    status: completed_gate_failed
     research_question: 去除letterbox显式长宽比后，ROI患者内平均的性能和类别安全性是否保持
     preregistered_gate: OOF macro-F1不低于E1超过0.02且任一类别灵敏度不下降超过0.05
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -158,24 +158,28 @@ experiments:
       source: working_tree_at_commit
       sha256: 81591aaf818c95ec5c1278bf6428f5f5ab34535f5c74974d793125268420cae3
     command: python tools/26_train_patient_image_mean.py --config configs/research/e1s_roi_stretch_mean_b2.yaml --fold FOLD
-    folds: [0, 1, 2, 3]
-    seeds: [20260724, 20260725, 20260726, 20260727]
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     git_commits_by_fold:
       - 0a1116da5d37153feb96820465e0b009003dff43
       - 35d64100790aa92d3172867ea82bfbaadd3c1c48
       - 5dc894a0343f75547d0516c93ff0392bd36164d8
       - 63a2214fb3b0caf470efaae62152f2ec023d205e
+      - d31c53b6daa2d0613df494e86eaa1bf8e880e3ea
     planned_folds: [0, 1, 2, 3, 4]
     planned_seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
     hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
-    runtime_hours_by_fold: [0.2789947129, 0.4268683781, 0.3695433667, 0.2934837827]
-    peak_allocated_gpu_gb_by_fold: [1.2451777458, 1.2439150810, 1.2448153496, 1.2458586693]
-    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    runtime_hours_by_fold: [0.2789947129, 0.4268683781, 0.3695433667, 0.2934837827, 0.3656683864]
+    peak_allocated_gpu_gb_by_fold: [1.2451777458, 1.2439150810, 1.2448153496, 1.2458586693, 1.2451777458]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
     oof:
-      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold0.csv
-      sha256: 901b1a470b6bb7a921a4f7bff056f612aebcd14fd37bc3fbee9acd0f1b4197f1
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_oof.csv
+      sha256: 8498d8b9e6215d8224530d5d9a5db2ec892c268defd4730c3c3408d6bbd7ab0d
     additional_fold_oof:
+      - fold: 0
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold0.csv
+        sha256: 901b1a470b6bb7a921a4f7bff056f612aebcd14fd37bc3fbee9acd0f1b4197f1
       - fold: 1
         path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold1.csv
         sha256: 75ba458590b11de76b535aadd858920a854f5e2ea51f390b2b51540374ae73fe
@@ -185,6 +189,9 @@ experiments:
       - fold: 3
         path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold3.csv
         sha256: 2320373838aec55787020fd953764741f51d48bbfd263d883eee471d29949c6c
+      - fold: 4
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold4.csv
+        sha256: e3902051f4c64d21234bc43c219472b11ac0789b12d200e753da72e87456a6d7
     results:
       fold_0_macro_f1: 0.1740522976
       fold_0_accuracy: 0.1958762887
@@ -206,10 +213,39 @@ experiments:
       fold_3_macro_auc: 0.5741826817
       fold_3_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold3-seed20260727-formal_summary.json
       fold_3_summary_sha256: cb5618c6012c9aded5c830180e7878485d5b093e7c3f7815a5869834bc72b0f1
-      merged_ci: not_available_until_fivefold_complete
-    mlflow_parent_run_ids: [7af38a691c6146c2890a7698c761c005, ff9bbe86de094d15bc3d38402afad51a, 79210c98e54644b8929f66fbb1dbe65c, 3eee97853c1d41bd9e607a33482096b8]
-    mlflow_fold_run_ids: [eacf5a04a00c41a589204c5e672d611d, 18b78b5939504526979757f4e00e556d, e16ce10862ea4978806c73460ee5d51d, ba894a5cfc8044b496cc90529c960466]
-    markdown_report: docs/research/logs/2026-08-02.md
-    failure_or_negative_reason: fold_0至3 macro-F1分别低于E1对应折约0.0345、0.0268、0.0259和0.0231；四折不能提前停止或选择
-    conclusion: 仅完成4折，禁止作总体效果结论
-    next_step: 运行fold_4并合并五折OOF
+      fold_4_macro_f1: 0.1996412108
+      fold_4_accuracy: 0.2435233161
+      fold_4_macro_auc: 0.6499821570
+      fold_4_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold4-seed20260728-formal_summary.json
+      fold_4_summary_sha256: 8a16bd9638c18ef6b62f0080365eef0c8c600b9b690746f53d1ca8ed8e0b21ff
+      merged_evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_vs_E1_oof_evaluation.json
+      merged_evaluation_sha256: 58738f8009a16cf7cecf949e086125a3f1b9265da180f95d730d196dec379ef6
+      macro_f1: 0.1933584714
+      macro_f1_ci95: [0.1651566237, 0.2198219173]
+      accuracy: 0.2461220269
+      macro_auc: 0.5881752339
+      paired_delta_vs_E1_macro_f1: -0.0221584436
+      paired_delta_ci95: [-0.0564232107, 0.0115640888]
+      class_sensitivity_delta_vs_E1:
+        normal: -0.1100000000
+        rheumatoid_arthritis: -0.0421455939
+        gouty_arthritis: 0.0775193798
+        spondyloarthritis: 0.0744680851
+        osteoarthritis: -0.1698113208
+        injury: 0.1267605634
+      fold_0_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1S/fold_0/best_formal.pt
+      fold_0_weight_sha256: dcce9ff23ba85a860c2307ee76b4f294c77d1f44b2906804c474ee7f74103f57
+      fold_1_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1S/fold_1/best_formal.pt
+      fold_1_weight_sha256: b7e890e8238da0d45caba4315f3beff47129ee3961a7dc27906c4e575e3c9d5a
+      fold_2_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1S/fold_2/best_formal.pt
+      fold_2_weight_sha256: 90eb6a234812b124444690ff60dd47782025c7ef6a710cc7ad6ef2cc3a38f363
+      fold_3_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1S/fold_3/best_formal.pt
+      fold_3_weight_sha256: 367715b57979fb4f81d95285bd65d37ecff966db71d8345a7ad0ee85cd913b9d
+      fold_4_weight_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1S/fold_4/best_formal.pt
+      fold_4_weight_sha256: 3670c7aae960ce68362f9cdc96ac5f0127b5ab9601c41bef83a2264715f6cea8
+    mlflow_parent_run_ids: [7af38a691c6146c2890a7698c761c005, ff9bbe86de094d15bc3d38402afad51a, 79210c98e54644b8929f66fbb1dbe65c, 3eee97853c1d41bd9e607a33482096b8, 17b7c0c4b2044cb0a8e5d4fe21103358]
+    mlflow_fold_run_ids: [eacf5a04a00c41a589204c5e672d611d, 18b78b5939504526979757f4e00e556d, e16ce10862ea4978806c73460ee5d51d, ba894a5cfc8044b496cc90529c960466, 2d98891d60d14a29ad1d9f99045a33ed]
+    markdown_report: docs/project/E1S_ROI几何敏感性消融结果_2026-08-02.md
+    failure_or_negative_reason: macro-F1比E1低0.0222且正常/OA灵敏度分别下降0.1100/0.1698，均触发预注册失败门槛
+    conclusion: E1-S停止；A1冻结为人工确认ROI等比例letterbox至384x384，不加边距
+    next_step: 实现E2 gated Attention MIL并运行单折资源试运行
