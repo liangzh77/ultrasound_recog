@@ -6,6 +6,13 @@ annotation_version: annotations_62ecb01c4d77
 ontology_config: configs/research/annotation_ontology_review_v0.yaml
 seed: 20260802
 required_independent_reviews: 2
+agreement:
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260802
+  minimum_raw_presence_agreement: pending_clinical_confirmation
+  minimum_binary_positive_agreement: pending_clinical_confirmation
+  minimum_presence_kappa: pending_clinical_confirmation
+  require_adjudication_for_any_core_disagreement: true
 selection:
   per_target_existing_positive: 25
   per_target_legacy_unlabeled_candidate: 25
@@ -30,11 +37,11 @@ review_fields:
   annotation_scope: [exhaustive_for_declared_targets, positive_only, uncertain]
   polygon_action: [keep, adjust, add, remove, not_applicable]
   subtype_by_target:
-    滑膜: [normal_synovium, synovial_hypertrophy, uncertain]
-    滑膜血流: [synovial_pd, synovial_cd, nonsynovial_signal, uncertain]
-    积液: [joint_effusion, other_fluid, uncertain]
-    骨侵蚀: [erosion, cortical_irregularity_other, uncertain]
-    骨赘: [osteophyte, cortical_prominence_other, uncertain]
-    痛风石: [tophus, other_mass, uncertain]
-    结晶: [double_contour, aggregate, other_calcification, uncertain]
-    腘窝囊肿: [popliteal_cyst, other_cystic_lesion, uncertain]
+    滑膜: [normal_synovium, synovial_hypertrophy, uncertain, not_applicable]
+    滑膜血流: [synovial_pd, synovial_cd, nonsynovial_signal, uncertain, not_applicable]
+    积液: [joint_effusion, other_fluid, uncertain, not_applicable]
+    骨侵蚀: [erosion, cortical_irregularity_other, uncertain, not_applicable]
+    骨赘: [osteophyte, cortical_prominence_other, uncertain, not_applicable]
+    痛风石: [tophus, other_mass, uncertain, not_applicable]
+    结晶: [double_contour, aggregate, other_calcification, uncertain, not_applicable]
+    腘窝囊肿: [popliteal_cyst, other_cystic_lesion, uncertain, not_applicable]
