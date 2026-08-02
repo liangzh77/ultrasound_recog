@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T21:20:00+08:00
+updated_at: 2026-08-02T21:45:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -148,7 +148,7 @@ experiments:
 
   - id: E1S-fivefold-formal
     kind: formal_model_in_progress
-    status: in_progress_fold_1_of_5_complete
+    status: in_progress_fold_2_of_5_complete
     research_question: 去除letterbox显式长宽比后，ROI患者内平均的性能和类别安全性是否保持
     preregistered_gate: OOF macro-F1不低于E1超过0.02且任一类别灵敏度不下降超过0.05
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -158,18 +158,19 @@ experiments:
       source: working_tree_at_commit
       sha256: 81591aaf818c95ec5c1278bf6428f5f5ab34535f5c74974d793125268420cae3
     command: python tools/26_train_patient_image_mean.py --config configs/research/e1s_roi_stretch_mean_b2.yaml --fold FOLD
-    folds: [0, 1]
-    seeds: [20260724, 20260725]
+    folds: [0, 1, 2]
+    seeds: [20260724, 20260725, 20260726]
     git_commits_by_fold:
       - 0a1116da5d37153feb96820465e0b009003dff43
       - 35d64100790aa92d3172867ea82bfbaadd3c1c48
+      - 5dc894a0343f75547d0516c93ff0392bd36164d8
     planned_folds: [0, 1, 2, 3, 4]
     planned_seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
     pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
     hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM
-    runtime_hours_by_fold: [0.2789947129, 0.4268683781]
-    peak_allocated_gpu_gb_by_fold: [1.2451777458, 1.2439150810]
-    fold_status: [EARLY_STOPPED, EARLY_STOPPED]
+    runtime_hours_by_fold: [0.2789947129, 0.4268683781, 0.3695433667]
+    peak_allocated_gpu_gb_by_fold: [1.2451777458, 1.2439150810, 1.2448153496]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
     oof:
       path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold0.csv
       sha256: 901b1a470b6bb7a921a4f7bff056f612aebcd14fd37bc3fbee9acd0f1b4197f1
@@ -177,6 +178,9 @@ experiments:
       - fold: 1
         path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold1.csv
         sha256: 75ba458590b11de76b535aadd858920a854f5e2ea51f390b2b51540374ae73fe
+      - fold: 2
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1S_fold2.csv
+        sha256: 93ad4acb80057824a02ec241f61018b8a07840aacad0ade8cfd786d8700506fb
     results:
       fold_0_macro_f1: 0.1740522976
       fold_0_accuracy: 0.1958762887
@@ -188,10 +192,15 @@ experiments:
       fold_1_macro_auc: 0.6453036446
       fold_1_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold1-seed20260725-formal_summary.json
       fold_1_summary_sha256: f52058f23911294828b72ce893366f588aa1be066464a49a055e1980f9a03a91
+      fold_2_macro_f1: 0.1497929551
+      fold_2_accuracy: 0.2590673575
+      fold_2_macro_auc: 0.6731252526
+      fold_2_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1S-fold2-seed20260726-formal_summary.json
+      fold_2_summary_sha256: 6550c5936580225e475753ad7fcb3e2b137181279c432883303e291e9de8e90d
       merged_ci: not_available_until_fivefold_complete
-    mlflow_parent_run_ids: [7af38a691c6146c2890a7698c761c005, ff9bbe86de094d15bc3d38402afad51a]
-    mlflow_fold_run_ids: [eacf5a04a00c41a589204c5e672d611d, 18b78b5939504526979757f4e00e556d]
+    mlflow_parent_run_ids: [7af38a691c6146c2890a7698c761c005, ff9bbe86de094d15bc3d38402afad51a, 79210c98e54644b8929f66fbb1dbe65c]
+    mlflow_fold_run_ids: [eacf5a04a00c41a589204c5e672d611d, 18b78b5939504526979757f4e00e556d, e16ce10862ea4978806c73460ee5d51d]
     markdown_report: docs/research/logs/2026-08-02.md
-    failure_or_negative_reason: fold_0和fold_1 macro-F1分别低于E1对应折约0.0345和0.0268；两折不能提前停止或选择
-    conclusion: 仅完成2折，禁止作总体效果结论
-    next_step: 运行fold_2并继续逐折登记
+    failure_or_negative_reason: fold_0至2 macro-F1分别低于E1对应折约0.0345、0.0268和0.0259；三折不能提前停止或选择
+    conclusion: 仅完成3折，禁止作总体效果结论
+    next_step: 运行fold_3并继续逐折登记
