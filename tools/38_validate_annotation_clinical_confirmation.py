@@ -21,6 +21,10 @@ from src.research_annotation_confirmation import (  # noqa: E402
     validate_completed_confirmation,
     validate_confirmation_template,
 )
+from src.research_annotation_confirmation_workbook import (  # noqa: E402
+    extract_confirmation_workbook,
+    reconcile_confirmation_workbook,
+)
 from src.research_ledger import sha256_file  # noqa: E402
 from src.research_runtime import set_below_normal_priority  # noqa: E402
 
@@ -211,6 +215,10 @@ def main() -> int:
         expected_completed_workbook_sha256=completed_workbook_sha256,
         deviation_reference_verified=deviation_adr is not None,
         **common,
+    )
+    extracted_workbook = extract_confirmation_workbook(completed_workbook_path)
+    result["workbook_reconciliation"] = reconcile_confirmation_workbook(
+        extracted_workbook, payload
     )
     result["provenance"] = {
         "confirmation_yaml_sha256": sha256_file(input_path),

@@ -11,7 +11,10 @@ from typing import Any
 from xml.etree import ElementTree
 import zipfile
 
-from src.research_annotation_confirmation import EXPECTED_MEDICAL_OPTIONS
+from src.research_annotation_confirmation import (
+    EXPECTED_MEDICAL_OPTIONS,
+    decisions_equivalent,
+)
 
 
 MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -275,4 +278,65 @@ def extract_confirmation_workbook(path: Path) -> dict[str, Any]:
             "signoff_names_retained": False,
             "raw_paths_retained": False,
         },
+    }
+
+
+def reconcile_confirmation_workbook(
+    workbook: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> dict[str, Any]:
+    """Require every filled workbook decision to match its machine YAML record."""
+    expected_date = _clean(confirmation["signoffs"]["confirmation_date"])
+    mismatches = []
+    for question_id, workbook_decision in workbook["medical_decisions"].items():
+        confirmation_decision = confirmation["medical_decisions"][question_id]
+        if workbook_decision["status"] not in {"已确认", "confirmed"}:
+            mismatches.append(f"{question_id}.status")
+        if workbook_decision["selected_option"] != confirmation_decision[
+            "selected_option"
+        ]:
+            mismatches.append(f"{question_id}.selected_option")
+        for field in ("operational_definition", "decision_reason"):
+            if _clean(workbook_decision[field]) != _clean(
+                confirmation_decision[field]
+            ):
+                mismatches.append(f"{question_id}.{field}")
+        if not workbook_decision["row_role_present"]:
+            mismatches.append(f"{question_id}.row_role")
+        if workbook_decision["row_date"] != expected_date:
+            mismatches.append(f"{question_id}.row_date")
+
+    for parameter_id, workbook_parameter in workbook["review_parameters"].items():
+        confirmation_parameter = confirmation["review_parameters"][parameter_id]
+        if workbook_parameter["status"] not in {"已确认", "confirmed"}:
+            mismatches.append(f"{parameter_id}.status")
+        if not decisions_equivalent(
+            workbook_parameter["final_value"],
+            confirmation_parameter["final_value"],
+        ):
+            mismatches.append(f"{parameter_id}.final_value")
+        if _clean(workbook_parameter["decision_reason"]) != _clean(
+            confirmation_parameter["decision_reason"]
+        ):
+            mismatches.append(f"{parameter_id}.decision_reason")
+
+    workbook_signoffs = workbook["signoffs"]
+    if not workbook_signoffs["clinical_signoff_present"]:
+        mismatches.append("signoffs.clinical")
+    if not workbook_signoffs["research_signoff_present"]:
+        mismatches.append("signoffs.research")
+    if workbook_signoffs["confirmation_date"] != expected_date:
+        mismatches.append("signoffs.confirmation_date")
+    if mismatches:
+        raise ValueError(
+            "Completed workbook and confirmation YAML differ in "
+            f"{len(mismatches)} fields: {', '.join(mismatches)}"
+        )
+    return {
+        "status": "completed_workbook_matches_confirmation_yaml",
+        "medical_rows_matched": len(workbook["medical_decisions"]),
+        "review_parameter_rows_matched": len(workbook["review_parameters"]),
+        "per_row_roles_and_dates_present": True,
+        "dual_signoff_presence_matched": True,
+        "privacy_contract_passed": workbook["privacy"],
     }

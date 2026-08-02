@@ -1,17 +1,22 @@
 from datetime import date
+from copy import deepcopy
 from pathlib import Path
 from xml.sax.saxutils import escape
 import zipfile
 
 import pytest
+import yaml
 
+from src.research_annotation_confirmation import RECOMMENDED_MEDICAL_OPTIONS
 from src.research_annotation_confirmation_workbook import (
     extract_confirmation_workbook,
     read_xlsx_cells,
+    reconcile_confirmation_workbook,
 )
 
 
 SHEET_NAMES = ["填写说明", "医学定义确认", "复核参数确认", "字段代码本", "文献与版本"]
+ROOT = Path(__file__).resolve().parent.parent
 QUESTION_LETTERS = {
     "Q1": "A",
     "Q2": "B",
@@ -46,6 +51,9 @@ def _write_completed_workbook(
     question_selection_override: tuple[str, str] | None = None,
     shared_signoff: bool = False,
     missing_signoff_date: bool = False,
+    numeric_dates: bool = False,
+    parameter_value_override: tuple[str, int | float] | None = None,
+    missing_medical_role: str | None = None,
 ) -> None:
     workbook_sheets = "".join(
         f'<sheet name="{name}" sheetId="{index}" r:id="rId{index}"/>'
@@ -75,7 +83,11 @@ def _write_completed_workbook(
         _inline_cell("B20", "controlled study lead name"),
     ]
     if not missing_signoff_date:
-        intro.append(_inline_cell("B21", date(2026, 8, 3).isoformat()))
+        intro.append(
+            _number_cell("B21", (date(2026, 8, 3) - date(1899, 12, 30)).days)
+            if numeric_dates
+            else _inline_cell("B21", date(2026, 8, 3).isoformat())
+        )
     medical = []
     for row, question_id in enumerate(QUESTION_LETTERS, start=6):
         letter = QUESTION_LETTERS[question_id]
@@ -88,8 +100,18 @@ def _write_completed_workbook(
                 _inline_cell(f"H{row}", f"{letter} selected"),
                 _inline_cell(f"I{row}", f"definition for {question_id}"),
                 _inline_cell(f"J{row}", "accepted after clinical review"),
-                _inline_cell(f"K{row}", "clinical role"),
-                _inline_cell(f"L{row}", "2026-08-03"),
+                _inline_cell(
+                    f"K{row}",
+                    "" if missing_medical_role == question_id else "clinical role",
+                ),
+                (
+                    _number_cell(
+                        f"L{row}",
+                        (date(2026, 8, 3) - date(1899, 12, 30)).days,
+                    )
+                    if numeric_dates
+                    else _inline_cell(f"L{row}", "2026-08-03")
+                ),
             ]
         )
     parameter_values = {
@@ -102,6 +124,8 @@ def _write_completed_workbook(
         "P7": 0.6,
         "P8": "2000次；报告95%CI；硬门槛按点估计",
     }
+    if parameter_value_override is not None:
+        parameter_values[parameter_value_override[0]] = parameter_value_override[1]
     parameters = []
     for row, (parameter_id, value) in enumerate(parameter_values.items(), start=6):
         value_cell = (
@@ -130,6 +154,33 @@ def _write_completed_workbook(
                 '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
                 "<si><t>controlled clinician name</t></si></sst>",
             )
+
+
+def _completed_confirmation():
+    payload = yaml.safe_load(
+        (ROOT / "configs/research/annotation_clinical_confirmation_v0.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["status"] = "completed_clinical_confirmation"
+    payload["provenance"]["completed_workbook_sha256"] = "1" * 64
+    for question_id, decision in payload["medical_decisions"].items():
+        decision["status"] = "confirmed"
+        decision["selected_option"] = RECOMMENDED_MEDICAL_OPTIONS[question_id]
+        decision["operational_definition"] = f"definition for {question_id}"
+        decision["decision_reason"] = "accepted after clinical review"
+    for parameter in payload["review_parameters"].values():
+        parameter["status"] = "confirmed"
+        parameter["final_value"] = deepcopy(parameter["recommended_value"])
+        parameter["decision_reason"] = "accepted before review"
+    payload["signoffs"] = {
+        "clinical_role": "musculoskeletal_ultrasound_clinician",
+        "clinical_confirmation_present": True,
+        "research_role": "study_lead",
+        "research_confirmation_present": True,
+        "confirmation_date": "2026-08-03",
+    }
+    return payload
 
 
 def test_completed_workbook_extracts_only_privacy_safe_contract(tmp_path):
@@ -194,3 +245,49 @@ def test_completed_workbook_rejects_missing_signoff_date(tmp_path):
 
     with pytest.raises(ValueError, match="Final confirmation date"):
         extract_confirmation_workbook(workbook)
+
+
+def test_workbook_and_yaml_reconcile_without_retaining_names(tmp_path):
+    workbook_path = tmp_path / "completed.xlsx"
+    _write_completed_workbook(workbook_path, numeric_dates=True)
+    workbook = extract_confirmation_workbook(workbook_path)
+
+    result = reconcile_confirmation_workbook(
+        workbook, _completed_confirmation()
+    )
+
+    assert result["medical_rows_matched"] == 8
+    assert result["review_parameter_rows_matched"] == 8
+    assert result["dual_signoff_presence_matched"] is True
+    assert "controlled clinician name" not in str(result)
+
+
+def test_workbook_yaml_reconciliation_rejects_option_mismatch(tmp_path):
+    workbook_path = tmp_path / "completed.xlsx"
+    _write_completed_workbook(
+        workbook_path, question_selection_override=("Q1", "B")
+    )
+    workbook = extract_confirmation_workbook(workbook_path)
+
+    with pytest.raises(ValueError, match="Q1.selected_option"):
+        reconcile_confirmation_workbook(workbook, _completed_confirmation())
+
+
+def test_workbook_yaml_reconciliation_rejects_parameter_mismatch(tmp_path):
+    workbook_path = tmp_path / "completed.xlsx"
+    _write_completed_workbook(
+        workbook_path, parameter_value_override=("P5", 0.81)
+    )
+    workbook = extract_confirmation_workbook(workbook_path)
+
+    with pytest.raises(ValueError, match="P5.final_value"):
+        reconcile_confirmation_workbook(workbook, _completed_confirmation())
+
+
+def test_workbook_yaml_reconciliation_rejects_missing_row_role(tmp_path):
+    workbook_path = tmp_path / "completed.xlsx"
+    _write_completed_workbook(workbook_path, missing_medical_role="Q3")
+    workbook = extract_confirmation_workbook(workbook_path)
+
+    with pytest.raises(ValueError, match="Q3.row_role"):
+        reconcile_confirmation_workbook(workbook, _completed_confirmation())
