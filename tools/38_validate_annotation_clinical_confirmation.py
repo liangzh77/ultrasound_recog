@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from xml.etree import ElementTree
@@ -32,11 +33,10 @@ DEFAULT_SOURCE_WORKBOOK = (
     / "annotation_review"
     / "S1a临床定义与复核参数确认表_v0_2026-08-03.xlsx"
 )
-DEFAULT_OUTPUT = (
-    PATIENT_MULTIMODAL_REPORTS_DIR
-    / "annotation_review"
-    / "annotation_clinical_confirmation_validation.json"
-)
+OUTPUT_DIR = PATIENT_MULTIMODAL_REPORTS_DIR / "annotation_review"
+MAX_YAML_BYTES = 1_000_000
+MAX_XLSX_BYTES = 20_000_000
+MAX_WORKBOOK_XML_BYTES = 2_000_000
 REQUIRED_WORKBOOK_SHEETS = {
     "填写说明",
     "医学定义确认",
@@ -56,12 +56,14 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Returned, filled workbook. Required unless --template-check is used.",
     )
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--template-check", action="store_true")
     return parser.parse_args()
 
 
 def _read_yaml(path: Path) -> dict:
+    if path.stat().st_size > MAX_YAML_BYTES:
+        raise ValueError("Clinical confirmation YAML exceeds the size limit")
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Clinical confirmation YAML must contain a mapping")
@@ -83,13 +85,18 @@ def _verify_deviation_adr(payload: dict) -> dict[str, str] | None:
 
 
 def _validate_workbook_container(path: Path) -> dict[str, object]:
+    if path.stat().st_size > MAX_XLSX_BYTES:
+        raise ValueError("Confirmation workbook exceeds the size limit")
     if not zipfile.is_zipfile(path):
         raise ValueError("Confirmation workbook is not a valid XLSX container")
     with zipfile.ZipFile(path) as archive:
         try:
-            workbook_xml = archive.read("xl/workbook.xml")
+            workbook_info = archive.getinfo("xl/workbook.xml")
         except KeyError as error:
             raise ValueError("Confirmation workbook has no workbook definition") from error
+        if workbook_info.file_size > MAX_WORKBOOK_XML_BYTES:
+            raise ValueError("Confirmation workbook definition exceeds the size limit")
+        workbook_xml = archive.read(workbook_info)
     root = ElementTree.fromstring(workbook_xml)
     namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     observed = {
@@ -104,13 +111,37 @@ def _validate_workbook_container(path: Path) -> dict[str, object]:
     return {"xlsx_container_valid": True, "required_sheets_present": sorted(observed)}
 
 
-def _project_output(path: Path) -> Path:
+def _project_output(path: Path | None, input_sha256: str) -> Path:
+    if path is None:
+        path = OUTPUT_DIR / (
+            f"annotation_clinical_confirmation_validation_{input_sha256[:12]}.json"
+        )
     resolved = path.resolve()
     try:
-        resolved.relative_to(ROOT.resolve())
+        resolved.relative_to(OUTPUT_DIR.resolve())
     except ValueError as error:
-        raise ValueError("Validation output must stay inside the project") from error
+        raise ValueError("Validation output must stay inside the review report directory") from error
+    if resolved.suffix.casefold() != ".json":
+        raise ValueError("Validation output must be a JSON file")
     return resolved
+
+
+def _git_state() -> dict[str, object]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return {"commit": commit, "dirty": bool(status.strip())}
 
 
 def main() -> int:
@@ -141,6 +172,7 @@ def main() -> int:
             "dataset_fingerprint": review_config["dataset_fingerprint"],
             "annotation_version": review_config["annotation_version"],
             "workbook_contract": source_workbook_contract,
+            "validation_git": _git_state(),
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
@@ -172,7 +204,8 @@ def main() -> int:
         "source_workbook_contract": source_workbook_contract,
         "completed_workbook_contract": completed_workbook_contract,
     }
-    output_path = _project_output(args.output)
+    result["provenance"]["validation_git"] = _git_state()
+    output_path = _project_output(args.output, sha256_file(input_path))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
