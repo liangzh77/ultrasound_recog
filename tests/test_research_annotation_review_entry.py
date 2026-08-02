@@ -16,6 +16,15 @@ from src.research_annotation_review_entry import (
 def _config():
     return {
         "status": "frozen_preregistered",
+        "study": "knee_annotation_review_queue_s1a",
+        "dataset_fingerprint": "a" * 64,
+        "annotation_version": "annotations_aaaaaaaaaaaa",
+        "frozen_provenance": {
+            "clinical_confirmation_report_sha256": "b" * 64,
+            "queue_sha256": "c" * 64,
+            "queue_rows": 1,
+            "preregistration_git_commit": "d" * 40,
+        },
         "required_independent_reviews": 2,
         "selection": {
             "diagnosis_visible_to_reviewer": False,

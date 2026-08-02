@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import os
 from pathlib import Path
+import re
 from typing import Any, Iterable, Mapping
 
 from src.research_annotation_agreement import validate_review_template
@@ -12,6 +13,8 @@ from src.research_annotation_review import PUBLIC_REVIEW_FIELDS
 
 
 FORMAL_ENTRY_PROTOCOL = "semantic_presence_only"
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 REVIEWER_VALUE_FIELDS = (
     "presence_state",
     "image_mode",
@@ -51,6 +54,28 @@ def validate_formal_entry_config(config: Mapping[str, Any]) -> dict[str, Any]:
     """Refuse formal entry unless the clinical preregistration is frozen."""
     if config.get("status") != "frozen_preregistered":
         raise ValueError("Formal review entry requires a frozen_preregistered config")
+    if config.get("study") != "knee_annotation_review_queue_s1a":
+        raise ValueError("Formal review config has an unexpected study identifier")
+    if not SHA256.fullmatch(_clean(config.get("dataset_fingerprint"))):
+        raise ValueError("Formal review data fingerprint is invalid")
+    if not re.fullmatch(
+        r"annotations_[0-9a-f]{12}", _clean(config.get("annotation_version"))
+    ):
+        raise ValueError("Formal review annotation version is invalid")
+    provenance = config.get("frozen_provenance", {})
+    if not SHA256.fullmatch(
+        _clean(provenance.get("clinical_confirmation_report_sha256"))
+    ):
+        raise ValueError("Formal review confirmation report hash is not frozen")
+    if not SHA256.fullmatch(_clean(provenance.get("queue_sha256"))):
+        raise ValueError("Formal review queue hash is not frozen")
+    queue_rows = provenance.get("queue_rows")
+    if isinstance(queue_rows, bool) or not isinstance(queue_rows, int) or queue_rows < 1:
+        raise ValueError("Formal review queue row count is not frozen")
+    if not GIT_COMMIT.fullmatch(
+        _clean(provenance.get("preregistration_git_commit"))
+    ):
+        raise ValueError("Formal review preregistration Git commit is not frozen")
     if int(config.get("required_independent_reviews", 0)) != 2:
         raise ValueError("Formal S1a entry currently requires exactly two reviewers")
     selection = config.get("selection", {})
@@ -80,6 +105,9 @@ def validate_formal_entry_config(config: Mapping[str, Any]) -> dict[str, Any]:
         "legacy_annotation_blinded": True,
         "geometry_capture_enabled": False,
         "geometry_reliability_stage": "S1b",
+        "queue_sha256": provenance["queue_sha256"],
+        "queue_rows": queue_rows,
+        "preregistration_git_commit": provenance["preregistration_git_commit"],
     }
 
 
@@ -107,6 +135,8 @@ def new_reviewer_response_rows(
     prefix = reviewer_prefix(slot)
     rows = [dict(row) for row in queue_rows]
     validate_review_template(rows, set(config["review_targets"]))
+    if len(rows) != int(config["frozen_provenance"]["queue_rows"]):
+        raise ValueError("Review queue row count differs from frozen provenance")
     response = []
     for source in rows:
         if any(
@@ -138,6 +168,14 @@ def validate_reviewer_response_rows(
     validate_formal_entry_config(config)
     records = [dict(row) for row in rows]
     validate_review_template(records, set(config["review_targets"]))
+    if len(records) != int(config["frozen_provenance"]["queue_rows"]):
+        raise ValueError("Review response row count differs from frozen provenance")
+    expected_reviews = str(config["required_independent_reviews"])
+    if any(
+        _clean(row["required_independent_reviews"]) != expected_reviews
+        for row in records
+    ):
+        raise ValueError("Review response reviewer count differs from frozen config")
     own_prefix = reviewer_prefix(slot)
     other_prefix = reviewer_prefix(2 if slot == 1 else 1)
     complete = 0

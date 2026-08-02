@@ -4,6 +4,11 @@ study: knee_annotation_review_queue_s1a
 dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 annotation_version: annotations_62ecb01c4d77
 ontology_config: configs/research/annotation_ontology_review_v0.yaml
+frozen_provenance:
+  clinical_confirmation_report_sha256: pending_clinical_confirmation
+  queue_sha256: pending_clinical_confirmation
+  queue_rows: pending_clinical_confirmation
+  preregistration_git_commit: pending_clinical_confirmation
 seed: 20260802
 required_independent_reviews: 2
 agreement:
