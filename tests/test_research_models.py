@@ -1,7 +1,11 @@
 import torch
 from torch import nn
 
-from src.research_models import MaskedMeanClassifier, create_timm_encoder
+from src.research_models import (
+    MaskedMeanClassifier,
+    MaskedMeanFeatureClassifier,
+    create_timm_encoder,
+)
 
 
 class MeanChannelEncoder(nn.Module):
@@ -70,3 +74,32 @@ def test_masked_mean_classifier_chunked_inference_matches_single_pass():
         chunked = model(images, mask, instance_chunk_size=2)["patient_probabilities"]
 
     assert torch.allclose(single, chunked)
+
+
+def test_mean_feature_classifier_is_order_invariant_and_ignores_padding():
+    model = MaskedMeanFeatureClassifier(
+        MeanChannelEncoder(),
+        feature_dim=3,
+        num_classes=3,
+        dropout=0.0,
+    )
+    with torch.no_grad():
+        model.head.weight.copy_(torch.eye(3))
+        model.head.bias.zero_()
+    images = torch.rand((2, 4, 3, 3, 3))
+    mask = torch.tensor([[True, True, True, False], [True, True, False, False]])
+    images[0, 3] = 1000.0
+    images[1, 2:] = 1000.0
+    permutation = torch.tensor([2, 0, 3, 1])
+
+    with torch.inference_mode():
+        original = model(images, mask)["patient_probabilities"]
+        permuted = model(images[:, permutation], mask[:, permutation])[
+            "patient_probabilities"
+        ]
+        chunked = model(images, mask, instance_chunk_size=2)[
+            "patient_probabilities"
+        ]
+
+    assert torch.allclose(original, permuted, atol=1e-6)
+    assert torch.allclose(original, chunked, atol=1e-6)

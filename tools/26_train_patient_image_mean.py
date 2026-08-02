@@ -269,7 +269,11 @@ def main() -> int:
     )
     from src.research_metrics import compute_patient_metrics
     from src.research_mil import GatedAttentionMILClassifier, summarize_attention
-    from src.research_models import MaskedMeanClassifier, create_timm_encoder
+    from src.research_models import (
+        MaskedMeanClassifier,
+        MaskedMeanFeatureClassifier,
+        create_timm_encoder,
+    )
     from src.research_schema import DIAGNOSIS_CLASSES
     from src.research_tracking import LocalResearchTracker
     from src.research_training import (
@@ -416,6 +420,13 @@ def main() -> int:
             feature_dim,
             num_classes=int(config["model"]["num_classes"]),
             attention_dim=int(config["model"]["attention_dim"]),
+            dropout=float(config["model"]["dropout"]),
+        ).cuda()
+    elif aggregation == "mean_feature":
+        model = MaskedMeanFeatureClassifier(
+            encoder,
+            feature_dim,
+            num_classes=int(config["model"]["num_classes"]),
             dropout=float(config["model"]["dropout"]),
         ).cuda()
     else:

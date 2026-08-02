@@ -37,11 +37,11 @@ def load_research_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("Research config must be a mapping")
-    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2", "E2R"}:
+    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2", "E2R", "E3"}:
         raise ValueError("Unsupported patient image experiment code")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi"}[
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi", "E3": "roi"}[
         config["experiment_code"]
     ]
     if config["input_mode"] != expected_mode:
@@ -59,6 +59,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E1S": "stretch",
         "E2": "letterbox",
         "E2R": "letterbox",
+        "E3": "letterbox",
     }[config["experiment_code"]]
     if data.get("resize_mode") != expected_resize:
         raise ValueError("Experiment code and resize_mode do not match")
@@ -75,11 +76,14 @@ def load_research_config(path: Path) -> dict[str, Any]:
     if not model.get("pretrained_path") or not model.get("pretrained_sha256"):
         raise ValueError("Local pretrained path and SHA-256 are required")
     aggregation = model.get("aggregation", "mean_probability")
-    expected_aggregation = (
-        "gated_attention"
-        if config["experiment_code"] in {"E2", "E2R"}
-        else "mean_probability"
-    )
+    expected_aggregation = {
+        "E0": "mean_probability",
+        "E1": "mean_probability",
+        "E1S": "mean_probability",
+        "E2": "gated_attention",
+        "E2R": "gated_attention",
+        "E3": "mean_feature",
+    }[config["experiment_code"]]
     if aggregation != expected_aggregation:
         raise ValueError("Experiment code and patient aggregation do not match")
     if aggregation == "gated_attention":

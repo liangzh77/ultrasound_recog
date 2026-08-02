@@ -120,6 +120,22 @@ def test_e2r_changes_only_preregistered_attention_regularization_from_e2():
     assert comparable_e2 == comparable_e2r
 
 
+def test_e3_changes_only_patient_aggregation_from_e1():
+    e1 = load_research_config(ROOT / "configs/research/e1_roi_mean_b2.yaml")
+    e3 = load_research_config(
+        ROOT / "configs/research/e3_roi_mean_feature_b2.yaml"
+    )
+
+    comparable_e1 = deepcopy(e1)
+    comparable_e3 = deepcopy(e3)
+    comparable_e1.pop("experiment_code")
+    comparable_e3.pop("experiment_code")
+    comparable_e3["model"].pop("aggregation")
+
+    assert e3["model"]["aggregation"] == "mean_feature"
+    assert comparable_e1 == comparable_e3
+
+
 def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):
     weights = tmp_path / "weights.bin"
     weights.write_bytes(b"known weights")
