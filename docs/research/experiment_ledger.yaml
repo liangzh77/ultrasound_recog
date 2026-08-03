@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T16:30:00+08:00
+updated_at: 2026-08-03T17:15:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1314,3 +1314,119 @@ experiments:
     failure_or_negative_reason: none; watch-dog parent did not relay child epoch stdout, but history, summary, checkpoint and MLflow all reconcile; pilot score excluded from selection
     conclusion: 时间、显存、数值稳定、机器记录和外层隔离门槛全部通过，允许启动G0固定正式五折
     next_step: 提交pilot登记后从同一干净Git基线顺序运行G0正式fold 0至4
+
+  - id: G0-fivefold-formal
+    kind: formal_model
+    status: completed_gate_failed
+    research_question: 只用患者全部ROI图像的固定Attention MIL能否稳定区分正常与异常并满足校准、注意力和资源门槛
+    preregistered_gate: OOF ROC-AUC不低于0.80且患者bootstrap 95% CI下限不低于0.75；异常灵敏度不低于0.90、正常特异度不低于0.50、macro-F1不低于0.70；至少4/5折AUC不低于0.75；ECE不高于0.10、Brier不高于0.15且校准不恶化；多图注意力塌缩率不高于0.50；全部门槛同时通过
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 2cfd083fbcdf53ffcbdd3a80f31f1d48c7095f4e
+    config:
+      path: configs/research/g0_roi_normal_abnormal_gate_b2.yaml
+      source: git_blob_at_commit
+      sha256: 4a06e647e6b1ba5e4223a4ec752110bf71b9bfc257e8b134271c508c9c53ed72
+    command: python tools/42_train_normal_abnormal_gate.py --config configs/research/g0_roi_normal_abnormal_gate_b2.yaml --fold FOLD; python tools/43_evaluate_normal_abnormal_gate.py --config configs/research/g0_roi_normal_abnormal_gate_b2.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM; four CPU threads; two DataLoader workers
+    runtime_hours_by_fold: [0.7536013369, 0.3111885704, 0.2409695846, 0.3294113070, 0.7333777804]
+    peak_allocated_gpu_gb_by_fold: [1.2522897720, 1.2541589737, 1.2605419159, 1.2575063705, 1.2471284866]
+    peak_reserved_gpu_gb_by_fold: [1.3925781250, 1.3906250000, 1.3574218750, 1.3671875000, 1.3867187500]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_oof.csv
+      sha256: 9ddccf6a108592075d8fcedc341f68893593283be92faf73b6cf124e0cdf26cc
+    additional_fold_oof:
+      - fold: 0
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_fold0.csv
+        sha256: f247222f1375aba5e586f0b35ebc0c6742079aba202e1eb43e20cc58144d3f73
+      - fold: 1
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_fold1.csv
+        sha256: 383d58035df470e7c961b39ed0646b227650bea16abd270af0a3546af675cf87
+      - fold: 2
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_fold2.csv
+        sha256: e8908623d436006127360146602f958437f2a03e56fa2053f3608782ac53fbe9
+      - fold: 3
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_fold3.csv
+        sha256: 544ad6da2e62450b48b11d337de9428b24bc8b5a72443ee2eb4e9401921b98b5
+      - fold: 4
+        path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_fold4.csv
+        sha256: 48fa3ac009d70d39a0628a76ab043bec0d9fee58eeae53bc36f134b48a775d7d
+    results:
+      patients: 967
+      images: 4543
+      normal_patients: 200
+      abnormal_patients: 767
+      roc_auc: 0.8672262060
+      roc_auc_ci95: [0.8431251630, 0.8672262060, 0.8897982399]
+      pr_auc: 0.9636433985
+      macro_f1: 0.7292672374
+      balanced_accuracy: 0.7205638853
+      abnormal_sensitivity: 0.9061277705
+      normal_specificity: 0.5350000000
+      binary_brier: 0.1405853149
+      binary_ece: 0.1291660994
+      uncalibrated_brier: 0.1778795377
+      uncalibrated_ece: 0.1648723940
+      fold_roc_auc: [0.9340909091, 0.9452922078, 0.6169934641, 0.6221405229, 0.9625816993]
+      folds_with_roc_auc_at_least_0_75: 3
+      pooled_attention_multi_image_collapse_rate: 0.0031813362
+      performance_attention_gate_passed: false
+      resource_recording_gate_passed: true
+      total_training_hours: 2.3685485792
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_oof_evaluation_9ddccf6a1085_4a06e647e6b1.json
+      evaluation_sha256: 0baba4ed01136ad10c917538e1ea63c6f33429a49a1f767d595e5f7deaa26dba
+      fold_0_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold0-seed20260724-formal_summary.json
+      fold_0_summary_sha256: 96e9d005b6bbf44f390355e8f4884be032143e72685b316e1c64b9df1ed2130e
+      fold_1_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold1-seed20260725-formal_summary.json
+      fold_1_summary_sha256: 89c506053dc9b39611c4ec8f9452b51eca871e889875f09eb59d123190fde32a
+      fold_2_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold2-seed20260726-formal_summary.json
+      fold_2_summary_sha256: 93f4ebe0e2460419d8852a59251b8a0cce0682d64ef19365b8532c94467c92b4
+      fold_3_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold3-seed20260727-formal_summary.json
+      fold_3_summary_sha256: 1c669ba65afb438fe604930c3b7790380d77773352173bf049e10f60e6e712c2
+      fold_4_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold4-seed20260728-formal_summary.json
+      fold_4_summary_sha256: 4305f7f4ebefe78e5e5ad59d8a4784103a12914a9e77f4fdd6b299ce28a3ea72
+      fold_0_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/G0_fold0.csv
+      fold_0_attention_sha256: 584c98689d9bca17f46500960537491212d20786daf611c81d6e2acdc6ab6b4f
+      fold_1_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/G0_fold1.csv
+      fold_1_attention_sha256: 2504f5459096c15e97b077dd5250499f36ba07b1da5f2cbee8aab2602e12c9f9
+      fold_2_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/G0_fold2.csv
+      fold_2_attention_sha256: 57dc45058eab2e4b455c7e6e2aa55602957127549892ab5805c2d6294026c2a4
+      fold_3_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/G0_fold3.csv
+      fold_3_attention_sha256: 20a47c492ff7dad937a2addce4710dc9348efc0cba49bf9faead1e81b2c05c3b
+      fold_4_attention_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/attention/G0_fold4.csv
+      fold_4_attention_sha256: ba78246ce3268dc671736891e2f72b85a828a3cf4aa084bf669a5a5229666ef3
+      fold_0_postprocessing_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_0/postprocessing_formal.json
+      fold_0_postprocessing_sha256: 212154e543a5f1bd5c82ab1c3ecb7ea224bb57edf3dfd37f4652609f42744452
+      fold_1_postprocessing_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_1/postprocessing_formal.json
+      fold_1_postprocessing_sha256: 4bace4222e92c7997258d2bf44453915afc76cdfc89c761d8836c681a500e303
+      fold_2_postprocessing_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_2/postprocessing_formal.json
+      fold_2_postprocessing_sha256: cc4a4182cdd025eb3aff0d2ba643a75bd0f7d31d80dee5226a3d5f9b1e58059e
+      fold_3_postprocessing_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_3/postprocessing_formal.json
+      fold_3_postprocessing_sha256: 9e3906ba62535a69094453a63eab0fcdb233a715ca2e0a35b6ecaa76ea749e20
+      fold_4_postprocessing_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_4/postprocessing_formal.json
+      fold_4_postprocessing_sha256: 83bcfed669e05887392b1dddc88e9422d8766f2c2ff186063b4c6341b8b6b6a6
+      model_artifacts:
+        - fold: 0
+          path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_0/best_formal.pt
+          sha256: ef6b40f58728b0bfd5ae46bdfc34ed93bbf88897ec23dd5ad114cf824735a27c
+        - fold: 1
+          path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_1/best_formal.pt
+          sha256: a0f00225da395de593b4986b5ecd0189effd390c898d0f0edda82f6a9890c1e3
+        - fold: 2
+          path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_2/best_formal.pt
+          sha256: b9086ff709e2baa19b78b7d7aa8363d46fc0fea8c7628b21db98538f3e9766fa
+        - fold: 3
+          path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_3/best_formal.pt
+          sha256: dbe1c930f44c0ea58239dccd58bd8c497f71bcd0fe8d486f1b5c9e3a58c4a007
+        - fold: 4
+          path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_4/best_formal.pt
+          sha256: 623499c05db574cfb0b9f007706dc278e63ac547f881fc09f56c62fd7eb07d5d
+    mlflow_parent_run_ids: [cace6be401db45bc95c45fbdef03a0a7, 8897dc25abb24041b3975ea562ed4d49, b44054cc7ea14d9ca9d9f93c9b1120e3, f86439adc51d4cb6add401cb6b7baad5, 2754a89107314a608d3da4ba4d190f31]
+    mlflow_fold_run_ids: [01187f0aa85d44afad8f2d7071662d90, b8e81fe87b674744b84d6f5a023c5619, ff6c31b7ac724db5a7ba6e88f4596c7d, a22fb1563d374333bc3227522c659e49, 74d10f34c2d14a38a3ac6a826d0951c2]
+    markdown_report: docs/project/G0患者级正常异常门控五折结果_2026-08-03.md
+    failure_or_negative_reason: fold 2/3 ROC-AUC为0.6170/0.6221，只有3/5折达到0.75；校准后ECE 0.1292高于0.10；其余性能、Brier、注意力和资源门通过
+    conclusion: G0正式总门槛失败，不冻结为正常异常门控模型；按ADR-014停止第二候选和F0-F2融合
+    next_step: 仅开展不改变模型选择的采集与折间异质性审计，或等待S1a临床确认/新增独立数据后另行预登记
