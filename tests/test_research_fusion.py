@@ -7,7 +7,13 @@ import numpy as np
 import pytest
 import yaml
 
-from src.research_fusion import X0Inputs, evaluate_x0, load_x0_inputs, sha256_file
+from src.research_fusion import (
+    X0Inputs,
+    _patient_output_rows,
+    evaluate_x0,
+    load_x0_inputs,
+    sha256_file,
+)
 
 
 CLASSES = ("类风湿性关节炎", "痛风性关节炎", "脊柱关节炎", "骨性关节炎", "损伤")
@@ -173,3 +179,14 @@ def test_evaluate_x0_stops_when_image_has_no_complementary_errors() -> None:
     assert report["d0_feasibility_gate"]["primary_blend_passed"] is False
     assert report["d0_feasibility_gate"]["error_rescue_passed"] is False
     assert report["d0_feasibility_gate"]["decision"] == "stop_after_x0"
+
+
+def test_patient_output_rows_are_deidentified_and_complete() -> None:
+    _, data = _evaluation_fixture(image_rescues=True)
+    rows = _patient_output_rows(data)
+    assert len(rows) == 25
+    assert all("姓名" not in column for column in rows[0])
+    assert all("path" not in column.casefold() for column in rows[0])
+    assert sum(column.startswith("e2_conditional_prob_") for column in rows[0]) == 5
+    assert sum(column.startswith("c3_prob_") for column in rows[0]) == 5
+    assert sum(column.startswith("x0_fixed_fusion_prob_") for column in rows[0]) == 5
