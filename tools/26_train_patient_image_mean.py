@@ -9,6 +9,7 @@ import math
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -37,7 +38,7 @@ from src.research_runtime import (  # noqa: E402
 from src.research_ledger import sha256_file  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--fold", type=int, choices=range(5), required=True)
@@ -46,7 +47,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--watchdog-child", action="store_true", help=argparse.SUPPRESS)
-    return parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def _load_patient_image_config(path: Path) -> dict:
+    import yaml
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict) and raw.get("experiment_code") == "G0":
+        from src.research_gate import load_gate_config
+
+        return load_gate_config(path)
+    return load_research_config(path)
 
 
 def _git_revision() -> tuple[str, bool]:
@@ -211,10 +223,11 @@ def _write_attention(
         writer.writerows(rows)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    args = parse_args(raw_args)
     config_path = args.config.resolve()
-    config = load_research_config(config_path)
+    config = _load_patient_image_config(config_path)
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -223,7 +236,7 @@ def main() -> int:
             sys.executable,
             "-u",
             str(Path(__file__).resolve()),
-            *sys.argv[1:],
+            *raw_args,
             "--watchdog-child",
         ]
         watched = run_with_hard_timeout(
@@ -258,8 +271,10 @@ def main() -> int:
     import torch
     from torch.utils.data import DataLoader
 
-    torch.set_num_threads(4)
-    torch.set_num_interop_threads(1)
+    torch.set_num_threads(int(config["runtime"].get("max_cpu_threads", 4)))
+    torch.set_num_interop_threads(
+        int(config["runtime"].get("max_interop_threads", 1))
+    )
 
     from src.research_dataset import (
         PatientBagDataset,
@@ -301,6 +316,9 @@ def main() -> int:
             encoding="utf-8"
         )
     )
+    is_gate = config["experiment_code"] == "G0"
+    if is_gate and source_freeze["dataset_version"] != config["data_fingerprint"]:
+        raise ValueError("G0 config and frozen dataset fingerprint do not match")
 
     record_sets = {
         split: load_fold_records(
@@ -311,6 +329,13 @@ def main() -> int:
         )
         for split in ("train", "validation", "test")
     }
+    if is_gate:
+        from src.research_gate import remap_records_to_gate
+
+        record_sets = {
+            split: remap_records_to_gate(records)
+            for split, records in record_sets.items()
+        }
     split_counts = {
         split: {
             "patients": len({record.person_key for record in records}),
@@ -318,6 +343,34 @@ def main() -> int:
         }
         for split, records in record_sets.items()
     }
+    if is_gate:
+        gate_people = {}
+        for records in record_sets.values():
+            for record in records:
+                previous = gate_people.setdefault(record.person_key, record.diagnosis_id)
+                if previous != record.diagnosis_id:
+                    raise ValueError("G0 patient has mixed binary labels across splits")
+        normal_patients = sum(label == 0 for label in gate_people.values())
+        abnormal_patients = sum(label == 1 for label in gate_people.values())
+        expected = config["data"]
+        if len(gate_people) != int(expected["expected_patients"]):
+            raise ValueError("G0 patient count differs from frozen config")
+        if sum(item["images"] for item in split_counts.values()) != int(
+            expected["expected_images"]
+        ):
+            raise ValueError("G0 image count differs from frozen config")
+        if normal_patients != int(expected["expected_normal_patients"]):
+            raise ValueError("G0 normal patient count differs from frozen config")
+        if abnormal_patients != int(expected["expected_abnormal_patients"]):
+            raise ValueError("G0 abnormal patient count differs from frozen config")
+        gate_counts = {
+            "patients": len(gate_people),
+            "images": sum(item["images"] for item in split_counts.values()),
+            "normal_patients": normal_patients,
+            "abnormal_patients": abnormal_patients,
+        }
+    else:
+        gate_counts = None
     run_contract = {
         "experiment_code": config["experiment_code"],
         "input_mode": config["input_mode"],
@@ -344,9 +397,20 @@ def main() -> int:
             PATIENT_MULTIMODAL_EXPERIMENT_DIR / "tracking" / "mlflow.db"
         ).relative_to(ROOT).as_posix(),
     }
+    if is_gate:
+        run_contract.update(
+            {
+                "task_type": config["task"]["type"],
+                "data_fingerprint": config["data_fingerprint"],
+                "gate_counts": gate_counts,
+            }
+        )
     print(json.dumps(run_contract, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
+    if is_gate:
+        print("G0 formal training path is not enabled in this increment", file=sys.stderr)
+        return 2
     if not start_decision.allowed:
         print("Training start rejected by resource policy", file=sys.stderr)
         return 2
