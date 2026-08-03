@@ -1,0 +1,79 @@
+study: h0_g0_heterogeneity_audit_v1
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+expected:
+  patients: 967
+  images: 4543
+  folds: [0, 1, 2, 3, 4]
+  normal_patients: 200
+  abnormal_patients: 767
+seed: 20260724
+resources:
+  numeric_threads: 2
+  target_minutes: 30
+  hard_limit_minutes: 120
+statistics:
+  permutations: 200
+  bootstrap_samples: 2000
+  fdr_alpha: 0.05
+  large_shift_smd: 0.50
+  broad_shift_smd: 0.25
+  broad_shift_fraction: 0.20
+  fold_identification_auc: 0.65
+  error_auc: 0.65
+  error_ci_lower: 0.50
+  error_fold_auc: 0.60
+  error_min_passing_folds: 3
+  correlation_abs_rho: 0.30
+  significance_alpha: 0.05
+inputs:
+  g0_oof:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_oof.csv
+    sha256: 9ddccf6a108592075d8fcedc341f68893593283be92faf73b6cf124e0cdf26cc
+  g0_evaluation:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/G0_oof_evaluation_9ddccf6a1085_4a06e647e6b1.json
+    sha256: 0baba4ed01136ad10c917538e1ea63c6f33429a49a1f767d595e5f7deaa26dba
+  image_proxy_features:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/image_proxy_features.csv
+    sha256: eff0684a6f5c0d4743d64eac910696c5c478762f85d65f516141aebaf84582ac
+  model_visible_proxy_audit:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/model_visible_proxy_audit.json
+    sha256: 380fdc2b2c669ef6c8a5a56278aaf531728d388ac60ac42c4fbf9c121a8f5118
+proxy_groups:
+  image_count_only:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/image_count_only_oof.csv
+    oof_sha256: cf7139cc51ee35713056d6189085bc6f2f8fface29e4c24c0181ae41aeb24223
+    visibility: indirectly_visible
+  roi_aspect_visible:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/roi_aspect_visible_oof.csv
+    oof_sha256: 4fd9b56f205c13a6786d4e1418b81ea37852ae401ba760a0c8870470292906e3
+    visibility: visible
+  roi_resolution_upper_bound:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/roi_resolution_upper_bound_oof.csv
+    oof_sha256: 7a6d72094105d9f9953fc57144b27ef7688c77ce2ad95055017ab9a92d37ebb4
+    visibility: inferable_upper_bound
+  dimensions_export:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/dimensions_export_oof.csv
+    oof_sha256: d6da883804b382e33923fa6ca374002170cc0329e6a1e4f4556c4f4ad0bc15dc
+    visibility: not_visible
+  outer_nonmedical:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/outer_nonmedical_oof.csv
+    oof_sha256: b7e11e384256d0f6adf0bc03d393ba94487d5adefaf933366127b04376d1aa68
+    visibility: not_visible
+  roi_edge_visible_control:
+    oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/proxy_audit/roi_edge_visible_control_oof.csv
+    oof_sha256: 41eb48dfe27c3c8a58481e46c0950dfcffe09662a339048002a77952ec05c36b
+    visibility: visible_medical_control
+outputs:
+  directory: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity
+  report: h0_g0_heterogeneity_audit.json
+  fold_shift_csv: h0_fold_feature_shifts.csv
+  error_oof_csv: h0_error_proxy_oof.csv
+  correlation_csv: h0_proxy_correlations.csv
+privacy:
+  forbidden_output_tokens:
+    - raw_image_path
+    - source_file
+    - patient_name
+    - excel
+    - private
+    - 2026_unlabeled
