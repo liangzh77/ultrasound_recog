@@ -44,6 +44,7 @@ OOF_REQUIRED_KINDS = {
     *FORMAL_MODEL_KINDS,
     "formal_bias_audit",
     "formal_bias_audit_superseded",
+    "formal_oof_audit",
 }
 FORBIDDEN_PATH_FRAGMENTS = (
     "workspace/data/raw/",

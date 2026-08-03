@@ -18,7 +18,7 @@ def test_current_research_ledger_has_required_provenance_and_valid_hashes():
     result = validate_research_ledger(LEDGER, ROOT, verify_artifacts=True)
 
     assert result["study_id"] == "knee_patient_multimodal_v1_20260724"
-    assert result["experiments"] == 27
+    assert result["experiments"] == 28
     assert result["formal_models"] == 12
 
 
@@ -88,6 +88,21 @@ def test_formal_bias_audit_oof_is_hash_verified():
             item
             for item in ledger["experiments"]
             if item["id"] == "S1-annotation-supervision-audit-formal"
+        )
+    )
+    record["oof"]["sha256"] = "0" * 64
+
+    with pytest.raises(ValueError, match="OOF artifact"):
+        validate_experiment_record(record, ROOT, verify_artifacts=True)
+
+
+def test_formal_oof_audit_is_hash_verified():
+    ledger = yaml.safe_load(LEDGER.read_text(encoding="utf-8"))
+    record = deepcopy(
+        next(
+            item
+            for item in ledger["experiments"]
+            if item["id"] == "X0-abnormal-oof-complementarity-formal"
         )
     )
     record["oof"]["sha256"] = "0" * 64

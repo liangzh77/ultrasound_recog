@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T18:25:00+08:00
+updated_at: 2026-08-03T19:48:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1513,3 +1513,54 @@ experiments:
     failure_or_negative_reason: H0-A六组均未检出广泛fold偏移或fold可识别性；正常误报和异常漏报六组均因性能或fold3单类稳定性失败；结果只是关联而非因果
     conclusion: 六组代理均可中等预测G0总体错误；仅ROI外非医学组和ROI边缘医学控制组同时通过代理概率相关，支持外部采集/导出关联与医学边缘控制关联，不支持G0直接利用ROI外信息
     next_step: 维持ADR-014停止G0和F0-F2；不按代理删除或重加权患者；重开图像路线需新的设备/操作者/切面元数据或独立标注队列并另行预登记
+
+  - id: X0-abnormal-oof-complementarity-formal
+    kind: formal_oof_audit
+    status: completed_primary_blend_failed_error_rescue_passed
+    research_question: 在已知异常患者中，E2严格OOF的ROI图像条件概率是否包含C3临床数值OOF未利用的五分类信息
+    preregistered_gate: 固定0.75 C3加0.25 E2条件概率需macro-F1至少提高0.01、配对95%CI下界大于0、至少4/5折正向且任类F1下降不超过0.05；或E2需正确挽救至少15%的C3错误并覆盖至少4折和3类，任一组通过才允许预登记D0
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 5e1f38ad3362ffdede342e23d55893f366c98403
+    config:
+      path: configs/research/x0_abnormal_oof_complementarity.yaml
+      source: git_blob_at_commit
+      sha256: b3969ac1593524af9667fcb2d3260ee442c4db7a73e3005ca779507f3b393b71
+    command: python tools/45_audit_abnormal_oof_complementarity.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724]
+    pretrained_sha256: not_applicable_existing_oof_only_no_new_model
+    hardware: Intel 6-core 12-thread CPU; 32GB RAM; low priority; two numeric threads; GPU not used
+    runtime: 24.0295181 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/fusion/X0_oof_complementarity.csv
+      sha256: f391d81296a60eac8a8f161f8e64fcd6a86aa58d15b8130e91b0794ba92dfeb3
+    results:
+      patients: 767
+      input_image_oof_sha256: 169472d914290f19e01c3fa591193704d8b6bbc732eafe69056d4d2f9bb17949
+      input_clinical_oof_sha256: 9bcdedef62b6179a8de0b5118d13a367184cbdc0f0b75a7f23d1bd4a14eb5d8c
+      e2_conditional_macro_f1: 0.3682914946
+      c3_macro_f1: 0.7185249091
+      fixed_fusion_macro_f1: 0.7225355494
+      fixed_fusion_delta_vs_c3: 0.0040106403
+      fixed_fusion_delta_ci95: [-0.0144644031, 0.0226631222]
+      positive_folds: 3
+      c3_errors: 172
+      c3_errors_rescued_by_e2: 48
+      c3_error_rescue_fraction_by_e2: 0.2790697674
+      rescue_fold_count: 5
+      rescue_class_count: 5
+      e2_errors: 471
+      e2_errors_rescued_by_c3: 347
+      e2_error_rescue_fraction_by_c3: 0.7367303609
+      primary_blend_gate_passed: false
+      error_rescue_gate_passed: true
+      allow_d0_preregistration: true
+      weights_sha256: not_applicable_no_new_model_or_weights
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/fusion/X0_oof_complementarity.json
+      report_sha256: 914c5a1521b7c70226478bb136aecdce67b22a78a6522d0359ebccc45e43d110
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [b901cfa45f614425a2e3e0b6d0263141]
+    markdown_report: docs/project/X0异常五分类图像临床OOF互补性检查结果_2026-08-03.md
+    failure_or_negative_reason: 固定融合仅提高0.0040且CI跨0、仅3/5折正向、ECE由0.0475恶化至0.1198；但E2跨5折5类挽救27.9%的C3错误
+    conclusion: 现成固定融合正式失败；错误挽救门通过，只允许另行预登记一个专用异常五分类图像候选D0，不得称融合成功
+    next_step: 冻结D0单一候选、资源pilot和性能类别安全校准注意力门；D0通过后才允许F0/F1
