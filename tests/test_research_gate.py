@@ -10,9 +10,11 @@ from src.research_gate import (
     GATE_CLASSES,
     apply_temperature,
     bootstrap_roc_auc_ci,
+    build_gate_prediction_rows,
     compute_gate_metrics,
     diagnosis_to_gate_id,
     fit_temperature,
+    fit_gate_postprocessor,
     load_gate_config,
     remap_records_to_gate,
     select_operating_threshold,
@@ -206,3 +208,54 @@ def test_temperature_application_rejects_invalid_temperature():
 
     with pytest.raises(ValueError, match="finite and positive"):
         apply_temperature(probabilities, 0.0)
+
+
+def test_postprocessor_fits_calibration_before_threshold_and_builds_safe_rows():
+    targets = np.asarray([0, 0, 1, 1])
+    probabilities = np.asarray(
+        [[0.65, 0.35], [0.70, 0.30], [0.40, 0.60], [0.30, 0.70]]
+    )
+    postprocessor = fit_gate_postprocessor(
+        targets,
+        probabilities,
+        minimum_abnormal_sensitivity=0.90,
+    )
+
+    rows = build_gate_prediction_rows(
+        person_keys=["P2", "P1", "P4", "P3"],
+        targets=targets,
+        probabilities=probabilities,
+        image_counts=[2, 1, 3, 2],
+        outer_fold=2,
+        model_id="G0-fold2-test",
+        postprocessor=postprocessor,
+    )
+
+    assert [row["person_key"] for row in rows] == ["P1", "P2", "P3", "P4"]
+    assert {row["prediction_level"] for row in rows} == {"patient_gate"}
+    assert {row["reference_class"] for row in rows} == {"normal", "abnormal"}
+    assert all(abs(row["prob_normal"] + row["prob_abnormal"] - 1) < 1e-12 for row in rows)
+    assert all(row["temperature"] == postprocessor.calibration.temperature for row in rows)
+    forbidden = {"diagnosis", "raw_path", "image_path", "filename"}
+    assert not forbidden.intersection(rows[0])
+
+
+def test_gate_prediction_rows_reject_duplicate_patients():
+    targets = np.asarray([0, 1])
+    probabilities = np.asarray([[0.8, 0.2], [0.2, 0.8]])
+    postprocessor = fit_gate_postprocessor(
+        targets,
+        probabilities,
+        minimum_abnormal_sensitivity=0.90,
+    )
+
+    with pytest.raises(ValueError, match="person_key values must be unique"):
+        build_gate_prediction_rows(
+            person_keys=["P1", "P1"],
+            targets=targets,
+            probabilities=probabilities,
+            image_counts=[1, 1],
+            outer_fold=0,
+            model_id="G0-fold0-test",
+            postprocessor=postprocessor,
+        )

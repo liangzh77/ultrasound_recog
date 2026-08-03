@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,22 @@ class TemperatureCalibration:
     optimizer_succeeded: bool
     used_identity_fallback: bool
     fit_split: str
+
+
+@dataclass(frozen=True)
+class GatePostprocessor:
+    calibration: TemperatureCalibration
+    operating_threshold: OperatingThreshold
+
+    def transform(self, probabilities: np.ndarray) -> np.ndarray:
+        return apply_temperature(probabilities, self.calibration.temperature)
+
+    def predict(self, probabilities: np.ndarray) -> np.ndarray:
+        calibrated = self.transform(probabilities)
+        return (
+            calibrated[:, GATE_CLASS_TO_ID["abnormal"]]
+            >= self.operating_threshold.threshold
+        ).astype(np.int64)
 
 
 def _nested(config: dict[str, Any], dotted_key: str) -> Any:
@@ -433,3 +450,77 @@ def fit_temperature(
         used_identity_fallback=use_identity,
         fit_split=fit_split,
     )
+
+
+def fit_gate_postprocessor(
+    validation_targets: np.ndarray,
+    validation_probabilities: np.ndarray,
+    *,
+    minimum_abnormal_sensitivity: float,
+) -> GatePostprocessor:
+    calibration = fit_temperature(
+        validation_targets,
+        validation_probabilities,
+        fit_split="inner_validation",
+    )
+    calibrated = apply_temperature(
+        validation_probabilities,
+        calibration.temperature,
+    )
+    threshold = select_operating_threshold(
+        validation_targets,
+        calibrated,
+        minimum_abnormal_sensitivity=minimum_abnormal_sensitivity,
+        fit_split="inner_validation",
+    )
+    return GatePostprocessor(calibration=calibration, operating_threshold=threshold)
+
+
+def build_gate_prediction_rows(
+    *,
+    person_keys: Sequence[str],
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    image_counts: Sequence[int],
+    outer_fold: int,
+    model_id: str,
+    postprocessor: GatePostprocessor,
+) -> list[dict[str, Any]]:
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    if len(person_keys) != len(targets) or len(image_counts) != len(targets):
+        raise ValueError("G0 prediction metadata must align one-to-one with patients")
+    if len(person_keys) != len(set(person_keys)):
+        raise ValueError("G0 prediction person_key values must be unique")
+    if any(int(value) < 1 for value in image_counts):
+        raise ValueError("Every G0 prediction requires at least one image")
+    if outer_fold not in range(5):
+        raise ValueError("G0 outer_fold must be between 0 and 4")
+    if not model_id.strip():
+        raise ValueError("G0 model_id cannot be empty")
+    calibrated = postprocessor.transform(probabilities)
+    predictions = (
+        calibrated[:, GATE_CLASS_TO_ID["abnormal"]]
+        >= postprocessor.operating_threshold.threshold
+    ).astype(np.int64)
+    rows = []
+    for index, person_key in enumerate(person_keys):
+        rows.append(
+            {
+                "prediction_level": "patient_gate",
+                "person_key": person_key,
+                "outer_fold": outer_fold,
+                "reference_class": GATE_CLASSES[int(targets[index])],
+                "reference_id": int(targets[index]),
+                "raw_prob_normal": float(probabilities[index, 0]),
+                "raw_prob_abnormal": float(probabilities[index, 1]),
+                "prob_normal": float(calibrated[index, 0]),
+                "prob_abnormal": float(calibrated[index, 1]),
+                "operating_threshold": postprocessor.operating_threshold.threshold,
+                "predicted_class": GATE_CLASSES[int(predictions[index])],
+                "predicted_id": int(predictions[index]),
+                "temperature": postprocessor.calibration.temperature,
+                "image_count": int(image_counts[index]),
+                "model_id": model_id,
+            }
+        )
+    return sorted(rows, key=lambda row: row["person_key"])
