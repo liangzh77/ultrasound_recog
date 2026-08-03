@@ -1592,9 +1592,9 @@ experiments:
       peak_gpu_memory_allocated_gb: 1.2524290085
       peak_gpu_memory_reserved_gb: 1.357421875
       outer_test_iterated: false
-      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/D0-fold0-seed20260724-pilot_summary.json
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/D0-fold0-seed20260724-initial-pilot_summary.json
       summary_sha256: d03d8ab46c372f8b4fc72a38ca743a20586ebe3bd6f277127fd7be669b3fe0da
-      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/best_pilot.pt
+      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/initial_pilot_before_cpu_amendment.pt
       pilot_checkpoint_sha256: 1f9f8d3e961760e97dd4e6d0b724d47cad266aced62f8086a3bc714d806579ec
       mlflow_status: FINISHED
     mlflow_parent_run_ids: [af947a3ac5a24685a5e22e0b1b403d5e]
