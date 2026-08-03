@@ -18,8 +18,8 @@ def test_current_research_ledger_has_required_provenance_and_valid_hashes():
     result = validate_research_ledger(LEDGER, ROOT, verify_artifacts=True)
 
     assert result["study_id"] == "knee_patient_multimodal_v1_20260724"
-    assert result["experiments"] == 23
-    assert result["formal_models"] == 11
+    assert result["experiments"] == 25
+    assert result["formal_models"] == 12
 
 
 def test_formal_model_cannot_omit_oof_or_configuration():
