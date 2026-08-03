@@ -1,15 +1,19 @@
 from copy import deepcopy
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src.research_dataset import ResearchImageRecord
 from src.research_gate import (
     ABNORMAL_DIAGNOSES,
     GATE_CLASSES,
+    bootstrap_roc_auc_ci,
+    compute_gate_metrics,
     diagnosis_to_gate_id,
     load_gate_config,
     remap_records_to_gate,
+    select_operating_threshold,
 )
 
 
@@ -97,3 +101,72 @@ def test_record_remap_rejects_inconsistent_source_diagnosis_id(tmp_path):
 
     with pytest.raises(ValueError, match="diagnosis_id do not match"):
         remap_records_to_gate(records)
+
+
+def test_threshold_is_fitted_only_on_inner_validation_and_meets_sensitivity():
+    targets = np.asarray([0, 0, 0, 1, 1, 1])
+    abnormal = np.asarray([0.10, 0.20, 0.60, 0.70, 0.80, 0.90])
+    probabilities = np.column_stack((1 - abnormal, abnormal))
+
+    selected = select_operating_threshold(
+        targets,
+        probabilities,
+        minimum_abnormal_sensitivity=0.90,
+        fit_split="inner_validation",
+    )
+
+    assert selected.threshold == 0.70
+    assert selected.abnormal_sensitivity == 1.0
+    assert selected.normal_specificity == 1.0
+    assert selected.constraint_met is True
+    with pytest.raises(ValueError, match="only be fitted on inner_validation"):
+        select_operating_threshold(
+            targets,
+            probabilities,
+            minimum_abnormal_sensitivity=0.90,
+            fit_split="outer_test",
+        )
+
+
+def test_gate_metrics_are_patient_level_and_block_all_abnormal_shortcut():
+    targets = np.asarray([0, 0, 1, 1])
+    abnormal = np.asarray([0.1, 0.2, 0.8, 0.9])
+    probabilities = np.column_stack((1 - abnormal, abnormal))
+
+    perfect = compute_gate_metrics(targets, probabilities, threshold=0.5)
+    all_abnormal = compute_gate_metrics(targets, probabilities, threshold=0.0)
+
+    assert perfect["roc_auc"] == 1.0
+    assert perfect["pr_auc"] == 1.0
+    assert perfect["macro_f1"] == 1.0
+    assert perfect["abnormal_sensitivity"] == 1.0
+    assert perfect["normal_specificity"] == 1.0
+    assert perfect["confusion_matrix"] == [[2, 0], [0, 2]]
+    assert all_abnormal["normal_specificity"] == 0.0
+    assert all_abnormal["macro_f1"] < 0.70
+
+
+def test_gate_input_contract_rejects_one_class_and_bad_probability_sums():
+    with pytest.raises(ValueError, match="both normal and abnormal"):
+        compute_gate_metrics(
+            np.asarray([1, 1]),
+            np.asarray([[0.2, 0.8], [0.1, 0.9]]),
+            threshold=0.5,
+        )
+    with pytest.raises(ValueError, match="sum to 1"):
+        compute_gate_metrics(
+            np.asarray([0, 1]),
+            np.asarray([[0.2, 0.7], [0.1, 0.8]]),
+            threshold=0.5,
+        )
+
+
+def test_stratified_bootstrap_auc_is_reproducible_and_contains_perfect_auc():
+    targets = np.asarray([0, 0, 0, 1, 1, 1])
+    abnormal = np.asarray([0.05, 0.10, 0.20, 0.80, 0.90, 0.95])
+    probabilities = np.column_stack((1 - abnormal, abnormal))
+
+    first = bootstrap_roc_auc_ci(targets, probabilities, samples=100, seed=7)
+    second = bootstrap_roc_auc_ci(targets, probabilities, samples=100, seed=7)
+
+    assert first == second == (1.0, 1.0, 1.0)

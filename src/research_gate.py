@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
+from sklearn.metrics import (
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    roc_auc_score,
+)
 
 from src.research_dataset import ResearchImageRecord
 from src.research_schema import DIAGNOSIS_CLASSES
@@ -21,6 +28,16 @@ ABNORMAL_DIAGNOSES = tuple(
 G0_DATA_FINGERPRINT = (
     "62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675"
 )
+
+
+@dataclass(frozen=True)
+class OperatingThreshold:
+    threshold: float
+    abnormal_sensitivity: float
+    normal_specificity: float
+    minimum_abnormal_sensitivity: float
+    constraint_met: bool
+    fit_split: str
 
 
 def _nested(config: dict[str, Any], dotted_key: str) -> Any:
@@ -166,3 +183,174 @@ def remap_records_to_gate(
             )
         )
     return remapped
+
+
+def _validate_binary_inputs(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    targets = np.asarray(targets, dtype=np.int64)
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    if targets.ndim != 1 or probabilities.shape != (len(targets), 2):
+        raise ValueError("G0 inputs must be one target and two probabilities per patient")
+    if len(targets) == 0 or set(np.unique(targets)) != {0, 1}:
+        raise ValueError("G0 evaluation requires both normal and abnormal patients")
+    if not np.isfinite(probabilities).all():
+        raise ValueError("G0 probabilities must be finite")
+    if (probabilities < 0).any() or (probabilities > 1).any():
+        raise ValueError("G0 probabilities must be in [0, 1]")
+    if not np.allclose(probabilities.sum(axis=1), 1.0, atol=1e-6):
+        raise ValueError("G0 probabilities must sum to 1")
+    return targets, probabilities
+
+
+def _sensitivity_specificity(
+    targets: np.ndarray,
+    abnormal_probabilities: np.ndarray,
+    threshold: float,
+) -> tuple[float, float]:
+    predictions = (abnormal_probabilities >= threshold).astype(np.int64)
+    matrix = confusion_matrix(targets, predictions, labels=[0, 1])
+    true_negative, false_positive, false_negative, true_positive = matrix.ravel()
+    sensitivity = true_positive / (true_positive + false_negative)
+    specificity = true_negative / (true_negative + false_positive)
+    return float(sensitivity), float(specificity)
+
+
+def select_operating_threshold(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    *,
+    minimum_abnormal_sensitivity: float,
+    fit_split: str,
+) -> OperatingThreshold:
+    if fit_split != "inner_validation":
+        raise ValueError("G0 threshold may only be fitted on inner_validation")
+    if not 0 < minimum_abnormal_sensitivity <= 1:
+        raise ValueError("minimum_abnormal_sensitivity must be in (0, 1]")
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    abnormal_probabilities = probabilities[:, 1]
+    candidates = sorted(
+        {0.0, 0.5, 1.0, *(float(value) for value in abnormal_probabilities)}
+    )
+    eligible = []
+    for threshold in candidates:
+        sensitivity, specificity = _sensitivity_specificity(
+            targets, abnormal_probabilities, threshold
+        )
+        if sensitivity >= minimum_abnormal_sensitivity:
+            eligible.append((specificity, sensitivity, threshold))
+    if not eligible:
+        return OperatingThreshold(
+            threshold=0.5,
+            abnormal_sensitivity=0.0,
+            normal_specificity=0.0,
+            minimum_abnormal_sensitivity=minimum_abnormal_sensitivity,
+            constraint_met=False,
+            fit_split=fit_split,
+        )
+    specificity, sensitivity, threshold = max(eligible)
+    return OperatingThreshold(
+        threshold=float(threshold),
+        abnormal_sensitivity=float(sensitivity),
+        normal_specificity=float(specificity),
+        minimum_abnormal_sensitivity=minimum_abnormal_sensitivity,
+        constraint_met=True,
+        fit_split=fit_split,
+    )
+
+
+def _binary_ece(
+    targets: np.ndarray,
+    abnormal_probabilities: np.ndarray,
+    bins: int = 10,
+) -> float:
+    if bins < 2:
+        raise ValueError("ECE requires at least two bins")
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    ece = 0.0
+    for index in range(bins):
+        upper_inclusive = index == bins - 1
+        selected = (abnormal_probabilities >= edges[index]) & (
+            abnormal_probabilities <= edges[index + 1]
+            if upper_inclusive
+            else abnormal_probabilities < edges[index + 1]
+        )
+        if selected.any():
+            ece += selected.mean() * abs(
+                float(targets[selected].mean())
+                - float(abnormal_probabilities[selected].mean())
+            )
+    return float(ece)
+
+
+def compute_gate_metrics(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    *,
+    threshold: float,
+    calibration_bins: int = 10,
+) -> dict[str, Any]:
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    if not 0 <= threshold <= 1:
+        raise ValueError("G0 operating threshold must be in [0, 1]")
+    abnormal_probabilities = probabilities[:, 1]
+    predictions = (abnormal_probabilities >= threshold).astype(np.int64)
+    sensitivity, specificity = _sensitivity_specificity(
+        targets, abnormal_probabilities, threshold
+    )
+    return {
+        "patients": int(len(targets)),
+        "normal_patients": int((targets == 0).sum()),
+        "abnormal_patients": int((targets == 1).sum()),
+        "threshold": float(threshold),
+        "roc_auc": float(roc_auc_score(targets, abnormal_probabilities)),
+        "pr_auc": float(average_precision_score(targets, abnormal_probabilities)),
+        "macro_f1": float(
+            f1_score(
+                targets,
+                predictions,
+                labels=[0, 1],
+                average="macro",
+                zero_division=0,
+            )
+        ),
+        "balanced_accuracy": float((sensitivity + specificity) / 2),
+        "abnormal_sensitivity": sensitivity,
+        "normal_specificity": specificity,
+        "binary_brier": float(
+            np.mean(np.square(abnormal_probabilities - targets))
+        ),
+        "binary_ece": _binary_ece(
+            targets, abnormal_probabilities, bins=calibration_bins
+        ),
+        "confusion_matrix": confusion_matrix(
+            targets, predictions, labels=[0, 1]
+        ).tolist(),
+    }
+
+
+def bootstrap_roc_auc_ci(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    *,
+    samples: int,
+    seed: int,
+) -> tuple[float, float, float]:
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    if samples < 1:
+        raise ValueError("bootstrap samples must be positive")
+    generator = np.random.default_rng(seed)
+    indices_by_class = [np.flatnonzero(targets == class_id) for class_id in (0, 1)]
+    estimates = []
+    for _ in range(samples):
+        sampled = np.concatenate(
+            [
+                generator.choice(indices, size=len(indices), replace=True)
+                for indices in indices_by_class
+            ]
+        )
+        estimates.append(roc_auc_score(targets[sampled], probabilities[sampled, 1]))
+    low, high = np.percentile(estimates, (2.5, 97.5))
+    observed = roc_auc_score(targets, probabilities[:, 1])
+    return float(low), float(observed), float(high)
