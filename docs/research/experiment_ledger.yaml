@@ -1,10 +1,11 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-02T23:59:00+08:00
+updated_at: 2026-08-03T16:30:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
   experiment: patient-primary-diagnosis
+  gate_experiment: patient-normal-abnormal-gate
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
@@ -1273,3 +1274,43 @@ experiments:
     failure_or_negative_reason: pooled注意力、总体性能和校准通过，但痛风/损伤F1较E2下降0.0863/0.0696，超过预登记0.05；fold 1/2注意力失败和fold 2启动失败亦保留
     conclusion: E2-R总体门槛失败，不进入图像主模型候选；检查点A2以当前无合格图像主模型关闭
     next_step: 按ADR-006停止Attention MIL补救，不运行第二强度；继续不依赖图像模型的C0-C4临床字段治理和临床单模态基线
+
+  - id: G0-fold0-pilot
+    kind: resource_pilot
+    status: completed_pipeline_only
+    research_question: 固定G0患者级正常异常门控能否在本机资源预算内训练且不迭代外层测试
+    preregistered_gate: 5 epochs小于1小时、峰值保留显存不超过9GB、无NaN或资源停止、外层test不迭代；pilot分数不用于模型选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: f8734d24957c86d8e24dec3c6cc354374b7d993e
+    config:
+      path: configs/research/g0_roi_normal_abnormal_gate_b2.yaml
+      source: git_blob_at_commit
+      sha256: 4a06e647e6b1ba5e4223a4ec752110bf71b9bfc257e8b134271c508c9c53ed72
+    command: python tools/42_train_normal_abnormal_gate.py --config configs/research/g0_roi_normal_abnormal_gate_b2.yaml --fold 0 --pilot
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel i5-10400; 32GB RAM; four CPU threads; two DataLoader workers
+    runtime: 0.1154882196 hours for 5 epochs
+    oof: not_applicable_outer_test_not_iterated
+    results:
+      epochs_completed: 5
+      best_validation_macro_f1_pipeline_only: 0.7524321185
+      peak_allocated_gpu_gb: 1.2522897720
+      peak_reserved_gpu_gb: 1.3925781250
+      maximum_observed_cpu_average_percent: 56.3
+      minimum_observed_memory_available_gb: 11.08
+      maximum_observed_gpu_temperature_c: 51.0
+      outer_test_iterated: false
+      checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/G0/fold_0/best_pilot.pt
+      checkpoint_sha256: 44c5634ed10c52e4b19430073ca2f9eb3bf8423522c36126438851456a96c794
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/G0-fold0-seed20260724-pilot_summary.json
+      summary_sha256: 3a3035c0e876a9ad4209bdf52b58732a0ccf3ff24bacc408de96c86d80d0bbd4
+      history_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/logs/G0/fold_0_pilot_history.json
+      history_sha256: 14a50cdcf5a9fcc33d3604c7fb3e44bdc8e2341300162162bf879fa80b848ed6
+    mlflow_parent_run_ids: [1d9fff97d4bf40dabed5842155fc241a]
+    mlflow_fold_run_ids: [ee8d2ee7947e4604aa053395c09c562b]
+    markdown_report: docs/project/G0资源pilot结果_2026-08-03.md
+    failure_or_negative_reason: none; watch-dog parent did not relay child epoch stdout, but history, summary, checkpoint and MLflow all reconcile; pilot score excluded from selection
+    conclusion: 时间、显存、数值稳定、机器记录和外层隔离门槛全部通过，允许启动G0固定正式五折
+    next_step: 提交pilot登记后从同一干净Git基线顺序运行G0正式fold 0至4
