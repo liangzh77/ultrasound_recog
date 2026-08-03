@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -136,6 +137,7 @@ def test_spearman_association_detects_stable_positive_signal():
     assert result["spearman_rho"] > 0.9
     assert result["same_direction_folds"] == 5
     assert result["passed"] is True
+    json.dumps(result, allow_nan=False)
 
 
 def test_fold_identification_detects_a_deliberately_encoded_fold():

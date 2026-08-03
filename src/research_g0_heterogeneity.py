@@ -575,7 +575,9 @@ def spearman_association(
         exceedances += abs(null_rho) >= abs(rho)
     p_value = (exceedances + 1) / (permutations + 1)
     direction = np.sign(rho)
-    same_direction_folds = sum(np.sign(value) == direction for value in fold_rho.values())
+    same_direction_folds = int(
+        sum(bool(np.sign(value) == direction) for value in fold_rho.values())
+    )
     passed = bool(
         abs(rho) >= float(thresholds["correlation_abs_rho"])
         and (ci[0] > 0 or ci[2] < 0)
