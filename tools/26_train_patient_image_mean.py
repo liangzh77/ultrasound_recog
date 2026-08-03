@@ -415,9 +415,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(json.dumps(run_contract, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
-    if is_gate and not args.pilot:
-        print("G0 formal folds require the frozen OOF evaluator", file=sys.stderr)
-        return 2
     if not start_decision.allowed:
         print("Training start rejected by resource policy", file=sys.stderr)
         return 2

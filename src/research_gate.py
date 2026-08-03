@@ -275,6 +275,13 @@ def _sensitivity_specificity(
     threshold: float,
 ) -> tuple[float, float]:
     predictions = (abnormal_probabilities >= threshold).astype(np.int64)
+    return _sensitivity_specificity_from_predictions(targets, predictions)
+
+
+def _sensitivity_specificity_from_predictions(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+) -> tuple[float, float]:
     matrix = confusion_matrix(targets, predictions, labels=[0, 1])
     true_negative, false_positive, false_negative, true_positive = matrix.ravel()
     sensitivity = true_positive / (true_positive + false_negative)
@@ -361,14 +368,32 @@ def compute_gate_metrics(
         raise ValueError("G0 operating threshold must be in [0, 1]")
     abnormal_probabilities = probabilities[:, 1]
     predictions = (abnormal_probabilities >= threshold).astype(np.int64)
-    sensitivity, specificity = _sensitivity_specificity(
-        targets, abnormal_probabilities, threshold
+    return _compute_gate_metrics_with_predictions(
+        targets,
+        probabilities,
+        predictions,
+        threshold=float(threshold),
+        calibration_bins=calibration_bins,
+    )
+
+
+def _compute_gate_metrics_with_predictions(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    predictions: np.ndarray,
+    *,
+    threshold: float | None,
+    calibration_bins: int,
+) -> dict[str, Any]:
+    abnormal_probabilities = probabilities[:, 1]
+    sensitivity, specificity = _sensitivity_specificity_from_predictions(
+        targets, predictions
     )
     return {
         "patients": int(len(targets)),
         "normal_patients": int((targets == 0).sum()),
         "abnormal_patients": int((targets == 1).sum()),
-        "threshold": float(threshold),
+        "threshold": threshold,
         "roc_auc": float(roc_auc_score(targets, abnormal_probabilities)),
         "pr_auc": float(average_precision_score(targets, abnormal_probabilities)),
         "macro_f1": float(
@@ -393,6 +418,31 @@ def compute_gate_metrics(
             targets, predictions, labels=[0, 1]
         ).tolist(),
     }
+
+
+def compute_gate_metrics_from_predictions(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    predictions: np.ndarray,
+    *,
+    calibration_bins: int = 10,
+) -> dict[str, Any]:
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    predictions = np.asarray(predictions, dtype=np.int64)
+    if predictions.shape != targets.shape or not set(np.unique(predictions)) <= {0, 1}:
+        raise ValueError("G0 predictions must be one binary value per patient")
+    return _compute_gate_metrics_with_predictions(
+        targets,
+        probabilities,
+        predictions,
+        threshold=None,
+        calibration_bins=calibration_bins,
+    )
+
+
+def validate_gate_probabilities(probabilities: np.ndarray) -> np.ndarray:
+    """Validate a two-column G0 probability matrix at a file boundary."""
+    return _validate_probability_matrix(probabilities)
 
 
 def bootstrap_roc_auc_ci(
