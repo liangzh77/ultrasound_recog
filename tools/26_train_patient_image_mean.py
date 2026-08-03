@@ -228,6 +228,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(raw_args)
     config_path = args.config.resolve()
     config = _load_patient_image_config(config_path)
+    is_gate = config["experiment_code"] == "G0"
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -300,6 +301,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     from src.research_transforms import build_training_augmentation
 
+    if is_gate:
+        from src.research_gate import GATE_CLASSES
+
+        class_names = GATE_CLASSES
+    else:
+        class_names = DIAGNOSIS_CLASSES
+
     policy = ResourcePolicy(
         soft_time_limit_hours=float(config["runtime"]["soft_limit_hours"]),
         hard_time_limit_hours=float(config["runtime"]["hard_limit_hours"]),
@@ -316,7 +324,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8"
         )
     )
-    is_gate = config["experiment_code"] == "G0"
     if is_gate and source_freeze["dataset_version"] != config["data_fingerprint"]:
         raise ValueError("G0 config and frozen dataset fingerprint do not match")
 
@@ -408,13 +415,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(json.dumps(run_contract, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
-    if is_gate:
-        print("G0 formal training path is not enabled in this increment", file=sys.stderr)
+    if is_gate and not args.pilot:
+        print("G0 formal folds require the frozen OOF evaluator", file=sys.stderr)
         return 2
     if not start_decision.allowed:
         print("Training start rejected by resource policy", file=sys.stderr)
         return 2
-    if not args.pilot and dirty:
+    if (is_gate or not args.pilot) and dirty:
         print("Formal training requires a clean committed worktree", file=sys.stderr)
         return 2
     if not torch.cuda.is_available():
@@ -547,29 +554,40 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     tracker = LocalResearchTracker(
         PATIENT_MULTIMODAL_EXPERIMENT_DIR / "tracking",
-        experiment_name="patient-primary-diagnosis",
+        experiment_name=(
+            "patient-normal-abnormal-gate"
+            if is_gate
+            else "patient-primary-diagnosis"
+        ),
     )
     started = time.monotonic()
     stop_status = "COMPLETED"
     stop_reasons: list[str] = []
     torch.cuda.reset_peak_memory_stats()
-    with tracker.parent_run(
-        run_id,
-        {
-            "experiment_code": code,
-            "prediction_level": "patient",
-            "input_mode": config["input_mode"],
-            "resize_mode": resize_mode,
-            "aggregation": aggregation,
-            "attention_kl_weight": float(
-                config["training"].get("attention_kl_weight", 0.0)
-            ),
-            "git_revision": revision,
-            "git_dirty": dirty,
-            "pilot": args.pilot,
-            "resume_requested": bool(args.resume),
-        },
-    ) as parent_run:
+    parent_metadata = {
+        "experiment_code": code,
+        "prediction_level": "patient",
+        "input_mode": config["input_mode"],
+        "resize_mode": resize_mode,
+        "aggregation": aggregation,
+        "attention_kl_weight": float(
+            config["training"].get("attention_kl_weight", 0.0)
+        ),
+        "git_revision": revision,
+        "git_dirty": dirty,
+        "pilot": args.pilot,
+        "resume_requested": bool(args.resume),
+    }
+    if is_gate:
+        parent_metadata.update(
+            {
+                "task_type": config["task"]["type"],
+                "data_fingerprint": config["data_fingerprint"],
+                "config_sha256": sha256_file(config_path),
+                "pretrained_sha256": config["model"]["pretrained_sha256"],
+            }
+        )
+    with tracker.parent_run(run_id, parent_metadata) as parent_run:
         run_contract["mlflow_parent_run_id"] = parent_run.info.run_id
         with tracker.fold_run(
             f"{run_id}-child",
@@ -612,7 +630,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 validation_metrics = compute_patient_metrics(
                     validation_result["targets"].numpy(),
                     validation_result["probabilities"].numpy(),
-                    DIAGNOSIS_CLASSES,
+                    class_names,
                 )
                 improved, should_stop = stopping.update(
                     epoch,
@@ -747,6 +765,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif best_path.is_file():
                 best = torch.load(best_path, map_location="cuda", weights_only=False)
                 model.load_state_dict(best["model"])
+                postprocessor = None
+                postprocessing_path = None
+                if is_gate:
+                    from src.research_gate import fit_gate_postprocessor
+
+                    best_validation_result = run_patient_epoch(
+                        model,
+                        loaders["validation"],
+                        device=torch.device("cuda"),
+                        optimizer=None,
+                        amp=bool(config["training"]["amp"]),
+                        instance_chunk_size=int(data_config["max_instances_train"]),
+                    )
+                    postprocessor = fit_gate_postprocessor(
+                        best_validation_result["targets"].numpy(),
+                        best_validation_result["probabilities"].numpy(),
+                        minimum_abnormal_sensitivity=float(
+                            config["evaluation"]["threshold_selection"][
+                                "minimum_abnormal_sensitivity"
+                            ]
+                        ),
+                    )
+                    postprocessing_path = artifact_dir / "postprocessing_formal.json"
+                    postprocessing_path.write_text(
+                        json.dumps(
+                            {
+                                "experiment_code": code,
+                                "outer_fold": args.fold,
+                                "seed": seed,
+                                "git_revision": revision,
+                                "config_sha256": sha256_file(config_path),
+                                **asdict(postprocessor),
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                        ),
+                        encoding="utf-8",
+                    )
                 test_result = run_patient_epoch(
                     model,
                     loaders["test"],
@@ -756,17 +812,52 @@ def main(argv: Sequence[str] | None = None) -> int:
                     instance_chunk_size=int(data_config["max_instances_train"]),
                     collect_attention=aggregation == "gated_attention",
                 )
-                test_metrics = compute_patient_metrics(
-                    test_result["targets"].numpy(),
-                    test_result["probabilities"].numpy(),
-                    DIAGNOSIS_CLASSES,
-                )
                 prediction_path = (
                     PATIENT_MULTIMODAL_REPORTS_DIR
                     / "oof"
                     / f"{code}_fold{args.fold}.csv"
                 )
-                _write_predictions(prediction_path, test_result, args.fold, run_id)
+                if is_gate:
+                    from src.research_gate import (
+                        build_gate_prediction_rows,
+                        compute_gate_metrics,
+                        write_gate_prediction_csv,
+                    )
+
+                    calibrated_test = postprocessor.transform(
+                        test_result["probabilities"].numpy()
+                    )
+                    threshold = postprocessor.operating_threshold.threshold
+                    test_metrics = compute_gate_metrics(
+                        test_result["targets"].numpy(),
+                        calibrated_test,
+                        threshold=threshold,
+                    )
+                    test_metrics_uncalibrated = compute_gate_metrics(
+                        test_result["targets"].numpy(),
+                        test_result["probabilities"].numpy(),
+                        threshold=threshold,
+                    )
+                    rows = build_gate_prediction_rows(
+                        person_keys=test_result["person_keys"],
+                        targets=test_result["targets"].numpy(),
+                        probabilities=test_result["probabilities"].numpy(),
+                        image_counts=test_result["image_counts"],
+                        outer_fold=args.fold,
+                        model_id=run_id,
+                        postprocessor=postprocessor,
+                    )
+                    write_gate_prediction_csv(prediction_path, rows)
+                else:
+                    test_metrics = compute_patient_metrics(
+                        test_result["targets"].numpy(),
+                        test_result["probabilities"].numpy(),
+                        class_names,
+                    )
+                    test_metrics_uncalibrated = None
+                    _write_predictions(
+                        prediction_path, test_result, args.fold, run_id
+                    )
                 prediction_relative = prediction_path.relative_to(ROOT).as_posix()
                 summary = {
                     **run_contract,
@@ -797,6 +888,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "stop_reason": stop_status,
                     "stop_reasons": stop_reasons,
                 }
+                if is_gate:
+                    summary.update(
+                        {
+                            "test_metrics_uncalibrated": test_metrics_uncalibrated,
+                            "postprocessing": asdict(postprocessor),
+                            "postprocessing_path": postprocessing_path.relative_to(
+                                ROOT
+                            ).as_posix(),
+                            "postprocessing_sha256": sha256_file(postprocessing_path),
+                        }
+                    )
                 if aggregation == "gated_attention":
                     attention_path = (
                         PATIENT_MULTIMODAL_REPORTS_DIR

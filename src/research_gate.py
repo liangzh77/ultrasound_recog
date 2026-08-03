@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import csv
 from dataclasses import dataclass, replace
 import hashlib
 from pathlib import Path
@@ -33,6 +34,23 @@ G0_DATA_FINGERPRINT = (
 )
 G0_CONFIG_SHA256 = (
     "4a06e647e6b1ba5e4223a4ec752110bf71b9bfc257e8b134271c508c9c53ed72"
+)
+GATE_OOF_COLUMNS = (
+    "prediction_level",
+    "person_key",
+    "outer_fold",
+    "reference_class",
+    "reference_id",
+    "raw_prob_normal",
+    "raw_prob_abnormal",
+    "prob_normal",
+    "prob_abnormal",
+    "operating_threshold",
+    "predicted_class",
+    "predicted_id",
+    "temperature",
+    "image_count",
+    "model_id",
 )
 
 
@@ -530,3 +548,20 @@ def build_gate_prediction_rows(
             }
         )
     return sorted(rows, key=lambda row: row["person_key"])
+
+
+def write_gate_prediction_csv(
+    path: Path,
+    rows: Sequence[dict[str, Any]],
+) -> Path:
+    if not rows:
+        raise ValueError("Cannot write an empty G0 prediction file")
+    expected = set(GATE_OOF_COLUMNS)
+    if any(set(row) != expected for row in rows):
+        raise ValueError("G0 prediction rows do not match the frozen OOF columns")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=GATE_OOF_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path.resolve()

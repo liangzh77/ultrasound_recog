@@ -1,4 +1,5 @@
 from copy import deepcopy
+import csv
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,7 @@ from src.research_gate import (
     load_gate_config,
     remap_records_to_gate,
     select_operating_threshold,
+    write_gate_prediction_csv,
 )
 
 
@@ -267,3 +269,30 @@ def test_gate_prediction_rows_reject_duplicate_patients():
             model_id="G0-fold0-test",
             postprocessor=postprocessor,
         )
+
+
+def test_gate_prediction_csv_has_frozen_public_columns(tmp_path):
+    targets = np.asarray([0, 1])
+    probabilities = np.asarray([[0.8, 0.2], [0.2, 0.8]])
+    postprocessor = fit_gate_postprocessor(
+        targets,
+        probabilities,
+        minimum_abnormal_sensitivity=0.90,
+    )
+    rows = build_gate_prediction_rows(
+        person_keys=["P1", "P2"],
+        targets=targets,
+        probabilities=probabilities,
+        image_counts=[1, 2],
+        outer_fold=0,
+        model_id="G0-fold0-test",
+        postprocessor=postprocessor,
+    )
+    destination = write_gate_prediction_csv(tmp_path / "g0.csv", rows)
+
+    with destination.open(encoding="utf-8-sig", newline="") as handle:
+        loaded = list(csv.DictReader(handle))
+    assert len(loaded) == 2
+    assert loaded[0]["person_key"] == "P1"
+    assert "diagnosis" not in loaded[0]
+    assert "image_path" not in loaded[0]
