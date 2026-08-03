@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -37,13 +38,41 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _markdown_files() -> list[Path]:
+    roots = [
+        ROOT / "README.md",
+        ROOT / "docs" / "research",
+        ROOT / "docs" / "project",
+        ROOT / "docs" / "decisions",
+    ]
+    files: list[Path] = []
+    for root in roots:
+        if root.is_file():
+            files.append(root)
+        elif root.is_dir():
+            files.extend(root.rglob("*.md"))
+    return sorted(set(files))
+
+
+def _local_markdown_target(target: str) -> str | None:
+    cleaned = target.strip().strip("<>")
+    if not cleaned or cleaned.startswith("#"):
+        return None
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", cleaned):
+        return None
+    if cleaned.startswith("mailto:"):
+        return None
+    return unquote(cleaned.split("#", 1)[0])
+
+
 def _validate_markdown_links(path: Path) -> int:
     text = path.read_text(encoding="utf-8")
     count = 0
     for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", text):
-        if "://" in target or target.startswith("#"):
+        local_target = _local_markdown_target(target)
+        if local_target is None:
             continue
-        resolved = (path.parent / target).resolve()
+        resolved = (path.parent / local_target).resolve()
         if not resolved.exists():
             raise ValueError(f"Broken Markdown link in {path}: {target}")
         count += 1
@@ -53,7 +82,7 @@ def _validate_markdown_links(path: Path) -> int:
 def main() -> int:
     args = parse_args()
     result = validate_research_ledger(args.ledger.resolve(), ROOT, verify_artifacts=True)
-    markdown_files = sorted((ROOT / "docs" / "research").rglob("*.md"))
+    markdown_files = _markdown_files()
     link_count = sum(_validate_markdown_links(path) for path in markdown_files)
     report = {
         "status": "PASS",
