@@ -76,7 +76,7 @@
 | 2026标签隐藏盲测 | 未启动；无合格冻结模型 | [剩余任务状态检查点](../project/研究剩余任务与停止状态检查点_2026-08-03.md) | 参考标准未查看，也未生成锁定预测 |
 | 研究恢复条件复核 | 完成；外部条件未变化 | [恢复条件复核检查点](../project/研究恢复条件复核检查点_2026-08-03.md) | 16,809/16,809逐文件SHA一致；S1a仍为8+8待确认且无双签署 |
 | X0异常五分类OOF互补性 | 完成；固定融合失败、错误挽救门通过 | [X0结果](../project/X0异常五分类图像临床OOF互补性检查结果_2026-08-03.md)、[预登记](../project/X0异常五分类图像临床OOF互补性检查预登记_2026-08-03.md)与[ADR-016](../decisions/ADR-016-以异常五分类OOF互补性门重开受控融合探索.md) | 固定融合+0.0040且CI跨0；E2挽救48/172个C3错误，覆盖5折5类；允许预登记D0 |
-| D0异常五分类ROI MIL | 资源pilot通过；正式结果未知 | [D0预登记](../project/D0异常五分类ROI患者MIL实验预登记_2026-08-03.md)与[pilot结果](../project/D0资源pilot结果_2026-08-03.md) | 0.0971小时、1.3574GB、outer test未迭代；允许正式五折 |
+| D0异常五分类ROI MIL | 正式尝试1因CPU饱和失败；资源修订pilot待运行 | [D0预登记](../project/D0异常五分类ROI患者MIL实验预登记_2026-08-03.md)、[失败记录](../project/D0正式fold0资源失败尝试1_2026-08-03.md)与[初始pilot](../project/D0资源pilot结果_2026-08-03.md) | outer test未迭代；`num_workers` 2→0，须重跑5-epoch pilot |
 
 其中 `workspace/...` 均指：
 
@@ -97,6 +97,7 @@ workspace/experiments/active/exp_2026-07_patient_multimodal_v1/
 | [ADR-007](../decisions/ADR-007-冻结C3临床数值基线并限制缺失模式用途.md) | Accepted | 冻结C3；C2/C4只作工作流偏差与敏感性，不启动额外临床模型搜索 |
 | [ADR-008](../decisions/ADR-008-以E3均值特征池化重开图像候选评估.md) | Accepted | 用患者级等权embedding平均区分患者目标收益与注意力收益，窄范围重开A2 |
 | [ADR-016](../decisions/ADR-016-以异常五分类OOF互补性门重开受控融合探索.md) | Accepted | 仅在异常患者五分类中以X0互补性门决定D0/F0/F1；不改变G0、六分类或2026停止决定 |
+| [ADR-017](../decisions/ADR-017-D0因CPU饱和将DataLoader-worker减为0.md) | Accepted | D0首次正式尝试因CPU饱和停止；仅将worker从2减为0并重跑资源pilot |
 | [ADR-009](../decisions/ADR-009-E3未通过总体及类别安全门槛并转向标注监督审计.md) | Accepted | E3总体及类别安全失败；停止聚合器搜索，转向已有区域/病变标注监督审计 |
 | [ADR-010](../decisions/ADR-010-拒绝28类平铺互斥监督并先冻结临床标注协议.md) | Accepted | 28类合同通过但不适合平铺互斥监督；先冻结本体、阴性和重叠协议 |
 | [ADR-011](../decisions/ADR-011-临床确认通过机器门后才允许冻结S1a.md) | Accepted | 临床确认必须经双工作簿哈希、8+8逐项对账、隐私、签署、真实ADR与合同兼容性门控；不自动改配置 |

@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T20:02:00+08:00
+updated_at: 2026-08-03T23:12:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1603,3 +1603,43 @@ experiments:
     failure_or_negative_reason: none_all_preregistered_resource_and_isolation_gates_passed
     conclusion: D0资源、数值、外层隔离和机器记录门全部通过，允许按原配置启动正式固定五折
     next_step: 从新的干净Git提交独立启动五个正式fold；不复用pilot checkpoint，不按pilot分数改参
+
+  - id: D0-fold0-formal-attempt1-cpu-saturation-failed
+    kind: formal_model_failed_attempt
+    status: failed_manual_stop_sustained_cpu_saturation
+    research_question: D0异常五分类ROI患者MIL能否在不卡死本机CPU的前提下完成正式fold 0
+    preregistered_gate: 正式单折需在本机CPU可用、单run目标12小时且硬限制24小时内完成；outer test只能在最佳验证epoch冻结后迭代一次
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: ee184d4e26dbb0f49f5f06448ec3c22242bb388a
+    config:
+      path: configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml
+      source: git_blob_at_commit
+      sha256: 6c7da2c0e83924bcb20ac75c4c54cdf32a5b57dee017ab21ce9de7b4f4683e0d
+    command: python tools/46_train_d0_abnormal_mil.py --config configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml --fold 0
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel 6-core 12-thread CPU; 32GB RAM; low priority; two numeric threads; four simultaneous DataLoader worker processes observed after epoch 1
+    runtime: 0.0829 hours
+    oof: not_available_stopped_before_outer_test
+    results:
+      patients: 767
+      images: 3789
+      fold: 0
+      epochs_completed: 1
+      observed_system_cpu_percent: [94.9, 100.0]
+      cpu_percent_after_stop: 48.8
+      peak_gpu_memory_allocated_gb: 1.2524290085
+      peak_gpu_memory_reserved_gb: 1.357421875
+      outer_test_iterated: false
+      failed_best_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/failed_attempt1_best_formal.pt
+      failed_best_checkpoint_sha256: 88c38dea992ecb1816c918f7a3ae4f5ad20074e21e21fde665b2326090dfa737
+      failed_resume_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/failed_attempt1_resume_formal.pt
+      failed_resume_checkpoint_sha256: a5eb05e830625319eb7b33773e5fcf40d929cc10e00ea9e1b5d1114678278db4
+      mlflow_status: FAILED
+    mlflow_parent_run_ids: [d91bbfd87772454abbf7a60586a637a2]
+    mlflow_fold_run_ids: [a02471e4dd7642048f42f921ce32f774]
+    markdown_report: docs/project/D0正式fold0资源失败尝试1_2026-08-03.md
+    failure_or_negative_reason: num_workers为2时训练与验证DataLoader同时保留四个worker，系统总CPU持续94.9%到100.0%，违反本机可用性上位约束
+    conclusion: 该尝试是资源失败而非性能结果；outer test未迭代，已见验证指标不解释且不用于调参
+    next_step: 按ADR-017仅将DataLoader worker从2减为0，重跑同样5-epoch资源pilot；禁止使用本失败尝试checkpoint恢复

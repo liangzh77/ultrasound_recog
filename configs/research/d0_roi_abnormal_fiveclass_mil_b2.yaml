@@ -1,5 +1,5 @@
 experiment_code: D0
-status: frozen_preregistered
+status: amended_preregistered_after_resource_failure
 study_id: knee_patient_multimodal_v1_20260724
 approved_on: '2026-08-03'
 approval_record: project_owner_approved_existing_data_abnormal_fusion_route
@@ -32,7 +32,7 @@ data:
   max_instances_train: 6
   patient_batch_size: 1
   effective_patient_batch_size: 8
-  num_workers: 2
+  num_workers: 0
 model:
   name: efficientnet_b2.ra_in1k
   pretrained: true

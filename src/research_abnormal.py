@@ -15,14 +15,17 @@ from src.research_dataset import ResearchImageRecord
 from src.research_schema import DIAGNOSIS_CLASSES
 
 
-D0_CONFIG_SHA256 = "6c7da2c0e83924bcb20ac75c4c54cdf32a5b57dee017ab21ce9de7b4f4683e0d"
+D0_CONFIG_SHA256 = "1f6908242864b404a360359a4cf8a2c1a801b86125997d39e1b2deb78f999f58"
 D0_DATA_FINGERPRINT = "62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675"
 D0_CLASS_SLUGS = ("ra", "ga", "spa", "oa", "injury")
 D0_PROBABILITY_COLUMNS = tuple(f"prob_{slug}" for slug in D0_CLASS_SLUGS)
 
 
 def _validate_d0_config(config: Mapping[str, Any]) -> None:
-    if config.get("experiment_code") != "D0" or config.get("status") != "frozen_preregistered":
+    if (
+        config.get("experiment_code") != "D0"
+        or config.get("status") != "amended_preregistered_after_resource_failure"
+    ):
         raise ValueError("D0 config identity or status changed")
     if config.get("data_fingerprint") != D0_DATA_FINGERPRINT:
         raise ValueError("D0 data fingerprint changed")
@@ -47,6 +50,8 @@ def _validate_d0_config(config: Mapping[str, Any]) -> None:
         raise ValueError("D0 expected image counts do not sum to 3789")
     if data.get("output_size") != 384 or data.get("resize_mode") != "letterbox":
         raise ValueError("D0 input geometry changed")
+    if int(data.get("num_workers", -1)) != 0:
+        raise ValueError("D0 amended DataLoader worker contract changed")
 
     model = config.get("model", {})
     if (
