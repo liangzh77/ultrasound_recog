@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import yaml
+from scipy.optimize import minimize_scalar
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -37,6 +38,16 @@ class OperatingThreshold:
     normal_specificity: float
     minimum_abnormal_sensitivity: float
     constraint_met: bool
+    fit_split: str
+
+
+@dataclass(frozen=True)
+class TemperatureCalibration:
+    temperature: float
+    validation_nll_before: float
+    validation_nll_after: float
+    optimizer_succeeded: bool
+    used_identity_fallback: bool
     fit_split: str
 
 
@@ -204,6 +215,19 @@ def _validate_binary_inputs(
     return targets, probabilities
 
 
+def _validate_probability_matrix(probabilities: np.ndarray) -> np.ndarray:
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    if probabilities.ndim != 2 or probabilities.shape[1] != 2:
+        raise ValueError("G0 probabilities must have shape [patients, 2]")
+    if len(probabilities) == 0 or not np.isfinite(probabilities).all():
+        raise ValueError("G0 probabilities must be non-empty and finite")
+    if (probabilities < 0).any() or (probabilities > 1).any():
+        raise ValueError("G0 probabilities must be in [0, 1]")
+    if not np.allclose(probabilities.sum(axis=1), 1.0, atol=1e-6):
+        raise ValueError("G0 probabilities must sum to 1")
+    return probabilities
+
+
 def _sensitivity_specificity(
     targets: np.ndarray,
     abnormal_probabilities: np.ndarray,
@@ -354,3 +378,58 @@ def bootstrap_roc_auc_ci(
     low, high = np.percentile(estimates, (2.5, 97.5))
     observed = roc_auc_score(targets, probabilities[:, 1])
     return float(low), float(observed), float(high)
+
+
+def apply_temperature(
+    probabilities: np.ndarray,
+    temperature: float,
+) -> np.ndarray:
+    probabilities = _validate_probability_matrix(probabilities)
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise ValueError("G0 temperature must be finite and positive")
+    clipped = np.clip(probabilities, 1e-12, 1.0)
+    scaled_logits = np.log(clipped) / float(temperature)
+    scaled_logits -= scaled_logits.max(axis=1, keepdims=True)
+    exponentiated = np.exp(scaled_logits)
+    return exponentiated / exponentiated.sum(axis=1, keepdims=True)
+
+
+def _binary_nll(targets: np.ndarray, probabilities: np.ndarray) -> float:
+    selected = np.clip(probabilities[np.arange(len(targets)), targets], 1e-12, 1.0)
+    return float(-np.log(selected).mean())
+
+
+def fit_temperature(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    *,
+    fit_split: str,
+) -> TemperatureCalibration:
+    if fit_split != "inner_validation":
+        raise ValueError("G0 temperature may only be fitted on inner_validation")
+    targets, probabilities = _validate_binary_inputs(targets, probabilities)
+    before = _binary_nll(targets, probabilities)
+
+    def objective(log_temperature: float) -> float:
+        calibrated = apply_temperature(probabilities, float(np.exp(log_temperature)))
+        return _binary_nll(targets, calibrated)
+
+    optimized = minimize_scalar(
+        objective,
+        bounds=(float(np.log(0.05)), float(np.log(20.0))),
+        method="bounded",
+        options={"xatol": 1e-8, "maxiter": 500},
+    )
+    candidate_temperature = float(np.exp(optimized.x))
+    candidate_after = float(optimized.fun)
+    use_identity = bool(not optimized.success or candidate_after > before + 1e-12)
+    temperature = 1.0 if use_identity else candidate_temperature
+    after = before if use_identity else candidate_after
+    return TemperatureCalibration(
+        temperature=temperature,
+        validation_nll_before=before,
+        validation_nll_after=after,
+        optimizer_succeeded=bool(optimized.success),
+        used_identity_fallback=use_identity,
+        fit_split=fit_split,
+    )

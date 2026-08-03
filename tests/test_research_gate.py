@@ -8,9 +8,11 @@ from src.research_dataset import ResearchImageRecord
 from src.research_gate import (
     ABNORMAL_DIAGNOSES,
     GATE_CLASSES,
+    apply_temperature,
     bootstrap_roc_auc_ci,
     compute_gate_metrics,
     diagnosis_to_gate_id,
+    fit_temperature,
     load_gate_config,
     remap_records_to_gate,
     select_operating_threshold,
@@ -170,3 +172,37 @@ def test_stratified_bootstrap_auc_is_reproducible_and_contains_perfect_auc():
     second = bootstrap_roc_auc_ci(targets, probabilities, samples=100, seed=7)
 
     assert first == second == (1.0, 1.0, 1.0)
+
+
+def test_temperature_is_fitted_only_on_inner_validation_and_improves_nll():
+    targets = np.asarray([0, 0, 0, 1, 1, 1])
+    probabilities = np.asarray(
+        [
+            [0.60, 0.40],
+            [0.65, 0.35],
+            [0.70, 0.30],
+            [0.40, 0.60],
+            [0.35, 0.65],
+            [0.30, 0.70],
+        ]
+    )
+
+    calibration = fit_temperature(
+        targets, probabilities, fit_split="inner_validation"
+    )
+    calibrated = apply_temperature(probabilities, calibration.temperature)
+
+    assert 0.05 <= calibration.temperature < 1.0
+    assert calibration.validation_nll_after < calibration.validation_nll_before
+    assert calibration.used_identity_fallback is False
+    assert np.allclose(calibrated.sum(axis=1), 1.0)
+    assert np.all(calibrated[np.arange(len(targets)), targets] > 0.60)
+    with pytest.raises(ValueError, match="only be fitted on inner_validation"):
+        fit_temperature(targets, probabilities, fit_split="outer_test")
+
+
+def test_temperature_application_rejects_invalid_temperature():
+    probabilities = np.asarray([[0.7, 0.3], [0.2, 0.8]])
+
+    with pytest.raises(ValueError, match="finite and positive"):
+        apply_temperature(probabilities, 0.0)
