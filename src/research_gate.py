@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,9 @@ ABNORMAL_DIAGNOSES = tuple(
 )
 G0_DATA_FINGERPRINT = (
     "62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675"
+)
+G0_CONFIG_SHA256 = (
+    "4a06e647e6b1ba5e4223a4ec752110bf71b9bfc257e8b134271c508c9c53ed72"
 )
 
 
@@ -183,6 +187,8 @@ def load_gate_config(path: Path) -> dict[str, Any]:
         range(20260724, 20260729)
     ):
         raise ValueError("Frozen G0 seeds changed")
+    if hashlib.sha256(path.read_bytes()).hexdigest() != G0_CONFIG_SHA256:
+        raise ValueError("Frozen G0 config SHA-256 mismatch")
     return config
 
 

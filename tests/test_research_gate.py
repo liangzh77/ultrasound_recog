@@ -59,6 +59,14 @@ def test_frozen_g0_config_rejects_contract_changes(tmp_path, path, value):
         load_gate_config(candidate)
 
 
+def test_frozen_g0_config_rejects_byte_changes_even_when_values_match(tmp_path):
+    candidate = tmp_path / "candidate.yaml"
+    candidate.write_bytes(CONFIG.read_bytes() + b"\n# changed after freeze\n")
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        load_gate_config(candidate)
+
+
 def test_all_six_diagnoses_map_to_the_frozen_binary_task():
     assert diagnosis_to_gate_id("正常") == 0
     assert all(diagnosis_to_gate_id(value) == 1 for value in ABNORMAL_DIAGNOSES)
