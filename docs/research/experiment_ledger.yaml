@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T17:15:00+08:00
+updated_at: 2026-08-03T18:07:32+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1430,3 +1430,37 @@ experiments:
     failure_or_negative_reason: fold 2/3 ROC-AUC为0.6170/0.6221，只有3/5折达到0.75；校准后ECE 0.1292高于0.10；其余性能、Brier、注意力和资源门通过
     conclusion: G0正式总门槛失败，不冻结为正常异常门控模型；按ADR-014停止第二候选和F0-F2融合
     next_step: 仅开展不改变模型选择的采集与折间异质性审计，或等待S1a临床确认/新增独立数据后另行预登记
+
+  - id: H0-formal-attempt1-report-serialization-failed
+    kind: formal_bias_audit_failed_attempt
+    status: failed_final_report_serialization
+    research_question: 测得的采集、导出、ROI几何和图像数量代理是否与G0折间失稳及错误相关
+    preregistered_gate: 按H0预登记完成SMD/KS/BH-FDR、fold识别、三个错误目标和代理OOF相关；主JSON、MLflow、CSV和文档必须一致才算成功
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 83be948cc09911db6690a8295bb7af15f470ca59
+    config:
+      path: configs/research/h0_g0_heterogeneity_audit.yaml
+      source: git_blob_at_commit
+      sha256: bdbf2c4e558faf2755ddf1eca33598a889f2d115d540eb4c8c9ede8aeed48811
+    command: python tools/44_audit_g0_heterogeneity.py --config configs/research/h0_g0_heterogeneity_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724]
+    pretrained_sha256: not_applicable_no_model_training
+    hardware: Intel i5-10400; 32GB RAM; CPU only; low priority; two numeric threads
+    runtime: 884.1 seconds
+    oof: not_available_final_report_serialization_failed
+    results:
+      completed_analysis_sections: [H0-A, H0-B, H0-C]
+      fold_shift_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_fold_feature_shifts.csv
+      fold_shift_sha256: ede99bcbed89f2fc50df8e0b6938630909c9c98ddbf35a1d17f4137913cccec3
+      partial_error_oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_error_proxy_oof.csv
+      partial_error_oof_sha256: d8ba16ec9a8ef681f7a6f4966032d37cb87220fe95ca3f9cc95513deef01e211
+      correlation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_proxy_correlations.csv
+      correlation_sha256: 9f2a92fe18c809ee2876de56a37c710d65b30948afa245283bfd3ddb971f2da4
+      report_status: not_created
+      mlflow_status: FAILED
+    mlflow_parent_run_ids: [7e0771a82b0a4e5fa3a98b92e7bc05de]
+    markdown_report: docs/project/H0_G0折间异质性审计正式运行失败记录_2026-08-03.md
+    failure_or_negative_reason: 全部统计完成后主JSON遇到numpy.int64不可序列化；无正式主报告，不构成研究结果
+    conclusion: 尝试1失败并保留；MLflow已纠正为FAILED，部分CSV只用于复核而不作结论
+    next_step: 从仅包含标量类型归一和序列化回归测试的新干净Git基线重跑同一冻结H0
