@@ -1,0 +1,105 @@
+experiment_code: D0
+status: frozen_preregistered
+study_id: knee_patient_multimodal_v1_20260724
+approved_on: '2026-08-03'
+approval_record: project_owner_approved_existing_data_abnormal_fusion_route
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+input_mode: roi
+seed: 20260724
+task:
+  prediction_level: patient
+  type: abnormal_five_class
+  classes: [ra, ga, spa, oa, injury]
+  source_classes: [类风湿性关节炎, 痛风性关节炎, 脊柱关节炎, 骨性关节炎, 损伤]
+  excluded_source_class: 正常
+data:
+  expected_patients: 767
+  expected_images: 3789
+  expected_patient_counts:
+    类风湿性关节炎: 261
+    痛风性关节炎: 129
+    脊柱关节炎: 94
+    骨性关节炎: 212
+    损伤: 71
+  expected_image_counts:
+    类风湿性关节炎: 1382
+    痛风性关节炎: 721
+    脊柱关节炎: 450
+    骨性关节炎: 954
+    损伤: 282
+  output_size: 384
+  resize_mode: letterbox
+  max_instances_train: 6
+  patient_batch_size: 1
+  effective_patient_batch_size: 8
+  num_workers: 2
+model:
+  name: efficientnet_b2.ra_in1k
+  pretrained: true
+  pretrained_path: assets/pretrained/efficientnet_b2_ra-bcdf34b7.pth
+  pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+  num_classes: 5
+  aggregation: gated_attention
+  attention_dim: 256
+  attention_collapse_threshold: 0.95
+  max_multi_image_collapse_rate: 0.50
+  dropout: 0.30
+optimizer:
+  name: AdamW
+  encoder_lr: 0.0001
+  head_lr: 0.0003
+  weight_decay: 0.0001
+  gradient_clip: 1.0
+training:
+  max_epochs: 60
+  warmup_epochs: 3
+  early_stopping_patience: 10
+  early_stopping_metric: macro_f1
+  amp: true
+  pilot_epochs: 5
+  attention_kl_weight: 0.05
+evaluation:
+  outer_folds: [0, 1, 2, 3, 4]
+  seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260724
+  baseline:
+    model_id: E2_conditional
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/fusion/X0_oof_complementarity.csv
+    sha256: f391d81296a60eac8a8f161f8e64fcd6a86aa58d15b8130e91b0794ba92dfeb3
+    macro_f1: 0.3682914946
+    ece: 0.4300843854
+    multiclass_brier: 0.9841047869
+gates:
+  minimum_macro_f1: 0.3982914946
+  minimum_macro_f1_delta_vs_e2_conditional: 0.03
+  require_paired_ci_lower_above_zero: true
+  minimum_positive_folds: 4
+  maximum_per_class_f1_drop: 0.05
+  minimum_each_class_f1: 0.20
+  maximum_ece: 0.30
+  maximum_multiclass_brier: 0.90
+  maximum_multi_image_attention_collapse_rate: 0.50
+runtime:
+  target_hours: 10.0
+  soft_limit_hours: 11.5
+  hard_limit_hours: 23.5
+  max_gpu_memory_gb: 9.0
+  max_cpu_threads: 2
+  max_interop_threads: 1
+privacy:
+  allow_clinical_features: false
+  allow_excel_availability: false
+  allow_raw_paths_in_public_outputs: false
+  allow_source_filenames_in_public_outputs: false
+  allow_2026_labels: false
+stopping:
+  pilot_requires_under_hours: 1.0
+  pilot_requires_outer_test_not_iterated: true
+  on_any_gate_failure: stop_without_fusion_training
+  prohibit_backbone_search: true
+  prohibit_aggregation_search: true
+  prohibit_loss_search: true
+  prohibit_kl_weight_search: true
+  prohibit_input_geometry_search: true
+  prohibit_additional_seed_search: true
