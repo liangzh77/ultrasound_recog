@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T19:48:00+08:00
+updated_at: 2026-08-03T20:02:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1564,3 +1564,42 @@ experiments:
     failure_or_negative_reason: 固定融合仅提高0.0040且CI跨0、仅3/5折正向、ECE由0.0475恶化至0.1198；但E2跨5折5类挽救27.9%的C3错误
     conclusion: 现成固定融合正式失败；错误挽救门通过，只允许另行预登记一个专用异常五分类图像候选D0，不得称融合成功
     next_step: 冻结D0单一候选、资源pilot和性能类别安全校准注意力门；D0通过后才允许F0/F1
+
+  - id: D0-fold0-resource-pilot
+    kind: resource_pilot
+    status: completed_all_resource_gates_passed
+    research_question: D0异常五分类ROI患者MIL能否在本机资源限制内稳定运行且不迭代outer test
+    preregistered_gate: fold0五epoch小于1小时、峰值保留显存不超过9GB、无NaN/溢出/资源停止、outer test不迭代；pilot分数不用于模型选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 31798d580e33bd266dc53b1a16c664c648624fd3
+    config:
+      path: configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml
+      source: git_blob_at_commit
+      sha256: 6c7da2c0e83924bcb20ac75c4c54cdf32a5b57dee017ab21ce9de7b4f4683e0d
+    command: python tools/46_train_d0_abnormal_mil.py --config configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml --fold 0 --pilot --pilot-epochs 5
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel 6-core 12-thread CPU; 32GB RAM; low priority; two CPU threads
+    runtime: 0.0971310066 hours
+    oof: not_applicable_resource_pilot_outer_test_not_iterated
+    results:
+      patients: 767
+      images: 3789
+      epochs_completed: 5
+      best_validation_macro_f1_descriptive_only: 0.4128151584
+      best_epoch_descriptive_only: 3
+      peak_gpu_memory_allocated_gb: 1.2524290085
+      peak_gpu_memory_reserved_gb: 1.357421875
+      outer_test_iterated: false
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/D0-fold0-seed20260724-pilot_summary.json
+      summary_sha256: d03d8ab46c372f8b4fc72a38ca743a20586ebe3bd6f277127fd7be669b3fe0da
+      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/best_pilot.pt
+      pilot_checkpoint_sha256: 1f9f8d3e961760e97dd4e6d0b724d47cad266aced62f8086a3bc714d806579ec
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [af947a3ac5a24685a5e22e0b1b403d5e]
+    mlflow_fold_run_ids: [2c8d2ef58fd7479389c498414cca4c6d]
+    markdown_report: docs/project/D0资源pilot结果_2026-08-03.md
+    failure_or_negative_reason: none_all_preregistered_resource_and_isolation_gates_passed
+    conclusion: D0资源、数值、外层隔离和机器记录门全部通过，允许按原配置启动正式固定五折
+    next_step: 从新的干净Git提交独立启动五个正式fold；不复用pilot checkpoint，不按pilot分数改参
