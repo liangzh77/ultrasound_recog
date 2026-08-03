@@ -1,0 +1,106 @@
+experiment_code: G0
+status: frozen_preregistered
+study_id: knee_patient_multimodal_v1_20260724
+approved_on: '2026-08-03'
+approval_record: project_owner_confirmed_in_thread
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+input_mode: roi
+seed: 20260724
+task:
+  prediction_level: patient
+  type: binary_normal_abnormal
+  classes:
+    - normal
+    - abnormal
+  normal_source_class: 正常
+  abnormal_source_classes:
+    - 类风湿性关节炎
+    - 痛风性关节炎
+    - 脊柱关节炎
+    - 骨性关节炎
+    - 损伤
+  normal_id: 0
+  abnormal_id: 1
+data:
+  expected_patients: 967
+  expected_images: 4543
+  expected_normal_patients: 200
+  expected_abnormal_patients: 767
+  output_size: 384
+  resize_mode: letterbox
+  max_instances_train: 6
+  patient_batch_size: 1
+  effective_patient_batch_size: 8
+  num_workers: 2
+model:
+  name: efficientnet_b2.ra_in1k
+  pretrained: true
+  pretrained_path: assets/pretrained/efficientnet_b2_ra-bcdf34b7.pth
+  pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+  num_classes: 2
+  aggregation: gated_attention
+  attention_dim: 256
+  attention_collapse_threshold: 0.95
+  max_multi_image_collapse_rate: 0.50
+  dropout: 0.30
+optimizer:
+  name: AdamW
+  encoder_lr: 0.0001
+  head_lr: 0.0003
+  weight_decay: 0.0001
+  gradient_clip: 1.0
+training:
+  max_epochs: 60
+  warmup_epochs: 3
+  early_stopping_patience: 10
+  early_stopping_metric: macro_f1
+  amp: true
+  pilot_epochs: 5
+  attention_kl_weight: 0.05
+evaluation:
+  outer_folds: [0, 1, 2, 3, 4]
+  seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260724
+  threshold_selection:
+    fit_split: inner_validation
+    objective: maximize_normal_specificity
+    minimum_abnormal_sensitivity: 0.90
+    fallback_threshold: 0.50
+    fallback_is_gate_failure: true
+  calibration:
+    method: temperature_scaling
+    fit_split: inner_validation
+    report_uncalibrated: true
+    formal_probabilities: calibrated
+gates:
+  minimum_oof_roc_auc: 0.80
+  minimum_oof_roc_auc_ci_low: 0.75
+  minimum_abnormal_sensitivity: 0.90
+  minimum_normal_specificity: 0.50
+  minimum_macro_f1: 0.70
+  minimum_folds_with_roc_auc_at_least_0_75: 4
+  maximum_calibrated_ece: 0.10
+  maximum_calibrated_brier: 0.15
+  calibration_must_not_worsen: true
+  maximum_multi_image_attention_collapse_rate: 0.50
+runtime:
+  target_hours: 10.0
+  soft_limit_hours: 11.5
+  hard_limit_hours: 23.5
+  max_gpu_memory_gb: 9.0
+  max_cpu_threads: 4
+  max_interop_threads: 1
+privacy:
+  allow_clinical_features: false
+  allow_excel_availability: false
+  allow_raw_paths_in_public_outputs: false
+  allow_source_filenames_in_public_outputs: false
+  allow_2026_labels: false
+stopping:
+  on_any_gate_failure: stop_without_second_candidate
+  prohibit_backbone_search: true
+  prohibit_aggregation_search: true
+  prohibit_loss_search: true
+  prohibit_kl_weight_search: true
+  prohibit_input_geometry_search: true
