@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T18:07:32+08:00
+updated_at: 2026-08-03T18:25:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -1464,3 +1464,52 @@ experiments:
     failure_or_negative_reason: 全部统计完成后主JSON遇到numpy.int64不可序列化；无正式主报告，不构成研究结果
     conclusion: 尝试1失败并保留；MLflow已纠正为FAILED，部分CSV只用于复核而不作结论
     next_step: 从仅包含标量类型归一和序列化回归测试的新干净Git基线重跑同一冻结H0
+
+  - id: H0-g0-heterogeneity-formal
+    kind: formal_bias_audit
+    status: completed_association_found_no_causal_claim
+    research_question: 测得的采集、导出、ROI几何和图像数量代理是否与G0折间失稳及错误相关
+    preregistered_gate: H0-A大偏移要求abs-SMD不小于0.50且BH q不大于0.05，广泛偏移要求组内至少20%特征abs-SMD不小于0.25且q不大于0.05，fold识别AUC不小于0.65且p不大于0.05；H0-B要求AUC不小于0.65、CI下限大于0.50、p不大于0.05、至少3/5折AUC不小于0.60且无单类折；H0-C要求abs-rho不小于0.30、CI不跨0、p不大于0.05且至少3/5折同方向
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: ea760cdee84395c2b43fff1dbb41e1e8faa59778
+    config:
+      path: configs/research/h0_g0_heterogeneity_audit.yaml
+      source: git_blob_at_commit
+      sha256: bdbf2c4e558faf2755ddf1eca33598a889f2d115d540eb4c8c9ede8aeed48811
+    command: python tools/44_audit_g0_heterogeneity.py --config configs/research/h0_g0_heterogeneity_audit.yaml
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724]
+    pretrained_sha256: not_applicable_no_model_training
+    hardware: Intel i5-10400; 32GB RAM; 12 logical CPUs; CPU only; low priority; two numeric threads; GPU not used
+    runtime: 773.0075726 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_error_proxy_oof.csv
+      sha256: d8ba16ec9a8ef681f7a6f4966032d37cb87220fe95ca3f9cc95513deef01e211
+    results:
+      patients: 967
+      images: 4543
+      total_errors: 165
+      normal_false_positives: 93
+      abnormal_false_negatives: 72
+      h0_a_groups_passed: 0
+      h0_b_total_error_groups_passed: 6
+      h0_b_normal_false_positive_groups_passed: 0
+      h0_b_abnormal_false_negative_groups_passed: 0
+      h0_c_groups_passed: [outer_nonmedical, roi_edge_visible_control]
+      interpretations: [external_acquisition_export_heterogeneity, medical_edge_control_association]
+      causal_claim: false
+      new_diagnostic_model_trained: false
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_g0_heterogeneity_audit.json
+      report_sha256: 3f568ed9a655bdff6eb78f2933c118266b2038ccfaef17ea62db5360765994eb
+      fold_shift_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_fold_feature_shifts.csv
+      fold_shift_sha256: ede99bcbed89f2fc50df8e0b6938630909c9c98ddbf35a1d17f4137913cccec3
+      correlation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/h0_g0_heterogeneity/h0_proxy_correlations.csv
+      correlation_sha256: 9f2a92fe18c809ee2876de56a37c710d65b30948afa245283bfd3ddb971f2da4
+      weights_sha256: not_applicable_no_persisted_weights
+      failed_attempt_csv_hashes_matched: true
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [ffa4dfeb9ce2496d9bee8962b21758e7]
+    markdown_report: docs/project/H0_G0折间异质性审计结果_2026-08-03.md
+    failure_or_negative_reason: H0-A六组均未检出广泛fold偏移或fold可识别性；正常误报和异常漏报六组均因性能或fold3单类稳定性失败；结果只是关联而非因果
+    conclusion: 六组代理均可中等预测G0总体错误；仅ROI外非医学组和ROI边缘医学控制组同时通过代理概率相关，支持外部采集/导出关联与医学边缘控制关联，不支持G0直接利用ROI外信息
+    next_step: 维持ADR-014停止G0和F0-F2；不按代理删除或重加权患者；重开图像路线需新的设备/操作者/切面元数据或独立标注队列并另行预登记
