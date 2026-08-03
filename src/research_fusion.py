@@ -12,6 +12,11 @@ import numpy as np
 import yaml
 
 from src.research_clinical import CLINICAL_CLASSES
+from src.research_metrics import (
+    bootstrap_macro_f1_ci,
+    compute_patient_metrics,
+    paired_bootstrap_macro_f1,
+)
 
 
 CLASS_SLUGS = ("ra", "ga", "spa", "oa", "injury")
@@ -190,3 +195,144 @@ def load_x0_inputs(
         clinical_probabilities=clinical_probabilities,
         fused_probabilities=fused,
     )
+
+
+def _model_report(
+    data: X0Inputs,
+    probabilities: np.ndarray,
+    bootstrap_samples: int,
+    bootstrap_seed: int,
+) -> dict[str, Any]:
+    interval = bootstrap_macro_f1_ci(
+        data.targets,
+        probabilities,
+        n_bootstrap=bootstrap_samples,
+        seed=bootstrap_seed,
+    )
+    return {
+        "metrics": compute_patient_metrics(
+            data.targets, probabilities, CLINICAL_CLASSES
+        ),
+        "macro_f1_95_ci": list(interval),
+        "fold_metrics": {
+            str(fold): compute_patient_metrics(
+                data.targets[data.outer_folds == fold],
+                probabilities[data.outer_folds == fold],
+                CLINICAL_CLASSES,
+            )
+            for fold in sorted(np.unique(data.outer_folds))
+        },
+    }
+
+
+def _error_complementarity(data: X0Inputs) -> dict[str, Any]:
+    targets = data.targets
+    image_predictions = data.image_probabilities.argmax(axis=1)
+    clinical_predictions = data.clinical_probabilities.argmax(axis=1)
+    clinical_wrong = clinical_predictions != targets
+    image_wrong = image_predictions != targets
+    rescued = clinical_wrong & (image_predictions == targets)
+    reverse_rescued = image_wrong & (clinical_predictions == targets)
+    clinical_error_count = int(clinical_wrong.sum())
+    image_error_count = int(image_wrong.sum())
+    return {
+        "clinical_error_count": clinical_error_count,
+        "clinical_errors_rescued_by_image": int(rescued.sum()),
+        "clinical_error_rescue_fraction_by_image": (
+            float(rescued.sum() / clinical_error_count) if clinical_error_count else 0.0
+        ),
+        "folds_with_clinical_error_rescue": sorted(
+            int(value) for value in np.unique(data.outer_folds[rescued])
+        ),
+        "classes_with_clinical_error_rescue": [
+            CLINICAL_CLASSES[int(value)] for value in sorted(np.unique(targets[rescued]))
+        ],
+        "image_error_count": image_error_count,
+        "image_errors_rescued_by_clinical": int(reverse_rescued.sum()),
+        "image_error_rescue_fraction_by_clinical": (
+            float(reverse_rescued.sum() / image_error_count) if image_error_count else 0.0
+        ),
+        "both_wrong_count": int((clinical_wrong & image_wrong).sum()),
+        "both_correct_count": int(((~clinical_wrong) & (~image_wrong)).sum()),
+    }
+
+
+def evaluate_x0(config: Mapping[str, Any], data: X0Inputs) -> dict[str, Any]:
+    evaluation = config["evaluation"]
+    samples = int(evaluation["bootstrap_samples"])
+    seed = int(evaluation["bootstrap_seed"])
+    reports = {
+        "E2_conditional": _model_report(
+            data, data.image_probabilities, samples, seed
+        ),
+        "C3": _model_report(data, data.clinical_probabilities, samples, seed),
+        "X0_fixed_fusion": _model_report(
+            data, data.fused_probabilities, samples, seed
+        ),
+    }
+    paired = paired_bootstrap_macro_f1(
+        data.targets,
+        data.clinical_probabilities,
+        data.fused_probabilities,
+        n_bootstrap=samples,
+        seed=seed,
+    )
+    fold_deltas = {
+        fold: (
+            reports["X0_fixed_fusion"]["fold_metrics"][fold]["macro_f1"]
+            - reports["C3"]["fold_metrics"][fold]["macro_f1"]
+        )
+        for fold in reports["C3"]["fold_metrics"]
+    }
+    c3_per_class = reports["C3"]["metrics"]["per_class"]
+    fusion_per_class = reports["X0_fixed_fusion"]["metrics"]["per_class"]
+    per_class_f1_deltas = {
+        baseline["class_name"]: float(candidate["f1"] - baseline["f1"])
+        for baseline, candidate in zip(c3_per_class, fusion_per_class)
+    }
+    complementarity = _error_complementarity(data)
+
+    gate = config["d0_feasibility_gate"]
+    blend_gate = gate["primary_blend"]
+    blend_checks = {
+        "macro_f1_delta": paired["observed_delta"]
+        >= float(blend_gate["minimum_macro_f1_delta_vs_c3"]),
+        "paired_ci_lower_above_zero": paired["ci_low"] > 0,
+        "positive_folds": sum(delta > 0 for delta in fold_deltas.values())
+        >= int(blend_gate["minimum_positive_folds"]),
+        "per_class_safety": min(per_class_f1_deltas.values())
+        >= -float(blend_gate["maximum_per_class_f1_drop"]),
+    }
+    rescue_gate = gate["error_rescue"]
+    rescue_checks = {
+        "rescue_fraction": complementarity["clinical_error_rescue_fraction_by_image"]
+        >= float(rescue_gate["minimum_c3_error_rescue_fraction_by_e2"]),
+        "fold_coverage": len(complementarity["folds_with_clinical_error_rescue"])
+        >= int(rescue_gate["minimum_folds_with_at_least_one_rescue"]),
+        "class_coverage": len(complementarity["classes_with_clinical_error_rescue"])
+        >= int(rescue_gate["minimum_classes_with_at_least_one_rescue"]),
+    }
+    blend_passed = all(blend_checks.values())
+    rescue_passed = all(rescue_checks.values())
+    allow_d0 = blend_passed or rescue_passed
+    return {
+        "patients": len(data.person_keys),
+        "outer_folds": sorted(int(value) for value in np.unique(data.outer_folds)),
+        "models": reports,
+        "fixed_fusion_minus_c3": {
+            **paired,
+            "fold_macro_f1_deltas": fold_deltas,
+            "per_class_f1_deltas": per_class_f1_deltas,
+        },
+        "error_complementarity": complementarity,
+        "d0_feasibility_gate": {
+            "primary_blend_checks": blend_checks,
+            "primary_blend_passed": blend_passed,
+            "error_rescue_checks": rescue_checks,
+            "error_rescue_passed": rescue_passed,
+            "allow_d0_preregistration": allow_d0,
+            "decision": (
+                "advance_to_d0_preregistration" if allow_d0 else "stop_after_x0"
+            ),
+        },
+    }

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import yaml
 
-from src.research_fusion import load_x0_inputs, sha256_file
+from src.research_fusion import X0Inputs, evaluate_x0, load_x0_inputs, sha256_file
 
 
 CLASSES = ("类风湿性关节炎", "痛风性关节炎", "脊柱关节炎", "骨性关节炎", "损伤")
@@ -112,3 +112,64 @@ def test_load_x0_inputs_rejects_hash_mismatch(tmp_path: Path) -> None:
     config_path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     with pytest.raises(ValueError, match="SHA-256"):
         load_x0_inputs(config_path, tmp_path)
+
+
+def _evaluation_fixture(image_rescues: bool) -> tuple[dict[str, object], X0Inputs]:
+    targets = np.tile(np.arange(5), 5)
+    folds = np.repeat(np.arange(5), 5)
+    clinical = np.full((25, 5), 0.025)
+    image = np.full((25, 5), 0.025)
+    for index, target in enumerate(targets):
+        clinical[index, target] = 0.9
+        image[index, target] = 0.9
+    for fold in range(5):
+        index = fold * 5 + fold
+        wrong = (int(targets[index]) + 1) % 5
+        clinical[index] = 0.025
+        clinical[index, wrong] = 0.9
+        if not image_rescues:
+            image[index] = clinical[index]
+    fused = 0.75 * clinical + 0.25 * image
+    config = {
+        "evaluation": {"bootstrap_samples": 50, "bootstrap_seed": 7},
+        "d0_feasibility_gate": {
+            "primary_blend": {
+                "minimum_macro_f1_delta_vs_c3": 0.01,
+                "require_paired_ci_lower_above_zero": True,
+                "minimum_positive_folds": 4,
+                "maximum_per_class_f1_drop": 0.05,
+            },
+            "error_rescue": {
+                "minimum_c3_error_rescue_fraction_by_e2": 0.15,
+                "minimum_folds_with_at_least_one_rescue": 4,
+                "minimum_classes_with_at_least_one_rescue": 3,
+            },
+        },
+    }
+    data = X0Inputs(
+        person_keys=tuple(f"SAFE_{index}" for index in range(25)),
+        outer_folds=folds,
+        targets=targets,
+        reference_classes=tuple(CLASSES[target] for target in targets),
+        image_probabilities=image,
+        clinical_probabilities=clinical,
+        fused_probabilities=fused,
+    )
+    return config, data
+
+
+def test_evaluate_x0_allows_d0_when_image_rescues_clinical_errors() -> None:
+    config, data = _evaluation_fixture(image_rescues=True)
+    report = evaluate_x0(config, data)
+    assert report["error_complementarity"]["clinical_errors_rescued_by_image"] == 5
+    assert report["d0_feasibility_gate"]["error_rescue_passed"] is True
+    assert report["d0_feasibility_gate"]["allow_d0_preregistration"] is True
+
+
+def test_evaluate_x0_stops_when_image_has_no_complementary_errors() -> None:
+    config, data = _evaluation_fixture(image_rescues=False)
+    report = evaluate_x0(config, data)
+    assert report["error_complementarity"]["clinical_errors_rescued_by_image"] == 0
+    assert report["d0_feasibility_gate"]["primary_blend_passed"] is False
+    assert report["d0_feasibility_gate"]["error_rescue_passed"] is False
+    assert report["d0_feasibility_gate"]["decision"] == "stop_after_x0"
