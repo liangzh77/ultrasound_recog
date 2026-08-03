@@ -1,13 +1,18 @@
+import csv
+import importlib.util
 from pathlib import Path
 
 import pytest
+import torch
 
 from src.research_abnormal import (
     D0_CONFIG_SHA256,
+    D0_PROBABILITY_COLUMNS,
     load_d0_config,
     remap_records_to_abnormal,
     validate_d0_record_sets,
 )
+from src.research_clinical import CLINICAL_CLASSES
 from src.research_dataset import ResearchImageRecord
 
 
@@ -73,3 +78,33 @@ def test_validate_d0_record_sets_checks_frozen_counts() -> None:
     )
     assert summary["patients"] == 2
     assert summary["images"] == 2
+
+
+def test_training_writer_emits_five_class_d0_oof(tmp_path: Path) -> None:
+    script = ROOT / "tools/26_train_patient_image_mean.py"
+    spec = importlib.util.spec_from_file_location("patient_image_training_tool", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    output = tmp_path / "d0.csv"
+    module._write_predictions(
+        output,
+        {
+            "probabilities": torch.tensor(
+                [[0.7, 0.1, 0.1, 0.05, 0.05], [0.1, 0.1, 0.1, 0.1, 0.6]]
+            ),
+            "targets": torch.tensor([0, 4]),
+            "person_keys": ["SAFE_1", "SAFE_2"],
+            "image_counts": [3, 2],
+        },
+        outer_fold=0,
+        model_id="D0-fold0-test",
+        class_names=CLINICAL_CLASSES,
+        probability_columns=D0_PROBABILITY_COLUMNS,
+    )
+    rows = list(csv.DictReader(output.open(encoding="utf-8-sig")))
+    assert len(rows) == 2
+    assert rows[0]["reference_class"] == "类风湿性关节炎"
+    assert rows[1]["reference_class"] == "损伤"
+    assert set(D0_PROBABILITY_COLUMNS) <= set(rows[0])
+    assert "prob_normal" not in rows[0]

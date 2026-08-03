@@ -58,6 +58,10 @@ def _load_patient_image_config(path: Path) -> dict:
         from src.research_gate import load_gate_config
 
         return load_gate_config(path)
+    if isinstance(raw, dict) and raw.get("experiment_code") == "D0":
+        from src.research_abnormal import load_d0_config
+
+        return load_d0_config(path)
     return load_research_config(path)
 
 
@@ -150,10 +154,14 @@ def _optimizer_and_scheduler(model, config, epochs):
     return optimizer, scheduler
 
 
-def _write_predictions(path: Path, result, outer_fold: int, model_id: str) -> None:
-    from src.research_oof import PROBABILITY_COLUMNS
-    from src.research_schema import DIAGNOSIS_CLASSES
-
+def _write_predictions(
+    path: Path,
+    result,
+    outer_fold: int,
+    model_id: str,
+    class_names: Sequence[str],
+    probability_columns: Sequence[str],
+) -> None:
     probabilities = result["probabilities"].numpy()
     targets = result["targets"].numpy()
     rows = []
@@ -163,17 +171,17 @@ def _write_predictions(path: Path, result, outer_fold: int, model_id: str) -> No
             "prediction_level": "patient",
             "person_key": person_key,
             "outer_fold": outer_fold,
-            "reference_class": DIAGNOSIS_CLASSES[int(targets[index])],
+            "reference_class": class_names[int(targets[index])],
             "reference_id": int(targets[index]),
             "image_count": int(result["image_counts"][index]),
             "model_id": model_id,
-            "top1": DIAGNOSIS_CLASSES[int(ranking[0])],
-            "top2": DIAGNOSIS_CLASSES[int(ranking[1])],
+            "top1": class_names[int(ranking[0])],
+            "top2": class_names[int(ranking[1])],
         }
         row.update(
             {
                 column: float(probabilities[index, class_id])
-                for class_id, column in enumerate(PROBABILITY_COLUMNS)
+                for class_id, column in enumerate(probability_columns)
             }
         )
         rows.append(row)
@@ -229,6 +237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     config_path = args.config.resolve()
     config = _load_patient_image_config(config_path)
     is_gate = config["experiment_code"] == "G0"
+    is_abnormal = config["experiment_code"] == "D0"
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -305,8 +314,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         from src.research_gate import GATE_CLASSES
 
         class_names = GATE_CLASSES
+        probability_columns = ("prob_normal", "prob_abnormal")
+    elif is_abnormal:
+        from src.research_abnormal import D0_PROBABILITY_COLUMNS
+        from src.research_clinical import CLINICAL_CLASSES
+
+        class_names = CLINICAL_CLASSES
+        probability_columns = D0_PROBABILITY_COLUMNS
     else:
+        from src.research_oof import PROBABILITY_COLUMNS
+
         class_names = DIAGNOSIS_CLASSES
+        probability_columns = PROBABILITY_COLUMNS
 
     policy = ResourcePolicy(
         soft_time_limit_hours=float(config["runtime"]["soft_limit_hours"]),
@@ -324,8 +343,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8"
         )
     )
-    if is_gate and source_freeze["dataset_version"] != config["data_fingerprint"]:
-        raise ValueError("G0 config and frozen dataset fingerprint do not match")
+    if (is_gate or is_abnormal) and source_freeze["dataset_version"] != config["data_fingerprint"]:
+        raise ValueError("Task config and frozen dataset fingerprint do not match")
 
     record_sets = {
         split: load_fold_records(
@@ -341,6 +360,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         record_sets = {
             split: remap_records_to_gate(records)
+            for split, records in record_sets.items()
+        }
+    elif is_abnormal:
+        from src.research_abnormal import remap_records_to_abnormal
+
+        record_sets = {
+            split: remap_records_to_abnormal(records)
             for split, records in record_sets.items()
         }
     split_counts = {
@@ -378,6 +404,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
     else:
         gate_counts = None
+    if is_abnormal:
+        from src.research_abnormal import validate_d0_record_sets
+
+        abnormal_counts = validate_d0_record_sets(record_sets, config)
+    else:
+        abnormal_counts = None
     run_contract = {
         "experiment_code": config["experiment_code"],
         "input_mode": config["input_mode"],
@@ -412,13 +444,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "gate_counts": gate_counts,
             }
         )
+    if is_abnormal:
+        run_contract.update(
+            {
+                "task_type": config["task"]["type"],
+                "data_fingerprint": config["data_fingerprint"],
+                "abnormal_counts": abnormal_counts,
+            }
+        )
     print(json.dumps(run_contract, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
     if not start_decision.allowed:
         print("Training start rejected by resource policy", file=sys.stderr)
         return 2
-    if (is_gate or not args.pilot) and dirty:
+    if (is_gate or is_abnormal or not args.pilot) and dirty:
         print("Formal training requires a clean committed worktree", file=sys.stderr)
         return 2
     if not torch.cuda.is_available():
@@ -554,7 +594,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         experiment_name=(
             "patient-normal-abnormal-gate"
             if is_gate
-            else "patient-primary-diagnosis"
+            else (
+                "patient-abnormal-fiveclass"
+                if is_abnormal
+                else "patient-primary-diagnosis"
+            )
         ),
     )
     started = time.monotonic()
@@ -576,6 +620,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "resume_requested": bool(args.resume),
     }
     if is_gate:
+        parent_metadata.update(
+            {
+                "task_type": config["task"]["type"],
+                "data_fingerprint": config["data_fingerprint"],
+                "config_sha256": sha256_file(config_path),
+                "pretrained_sha256": config["model"]["pretrained_sha256"],
+            }
+        )
+    if is_abnormal:
         parent_metadata.update(
             {
                 "task_type": config["task"]["type"],
@@ -853,7 +906,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     test_metrics_uncalibrated = None
                     _write_predictions(
-                        prediction_path, test_result, args.fold, run_id
+                        prediction_path,
+                        test_result,
+                        args.fold,
+                        run_id,
+                        class_names,
+                        probability_columns,
                     )
                 prediction_relative = prediction_path.relative_to(ROOT).as_posix()
                 summary = {
