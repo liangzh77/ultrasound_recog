@@ -1643,3 +1643,106 @@ experiments:
     failure_or_negative_reason: num_workers为2时训练与验证DataLoader同时保留四个worker，系统总CPU持续94.9%到100.0%，违反本机可用性上位约束
     conclusion: 该尝试是资源失败而非性能结果；outer test未迭代，已见验证指标不解释且不用于调参
     next_step: 按ADR-017仅将DataLoader worker从2减为0，重跑同样5-epoch资源pilot；禁止使用本失败尝试checkpoint恢复
+
+  - id: D0-fold0-resource-pilot-amended-workers0
+    kind: resource_pilot
+    status: completed_all_amended_resource_gates_passed
+    research_question: DataLoader worker固定为0后，D0能否在不持续占满CPU且不迭代outer test的前提下稳定运行
+    preregistered_gate: fold0五epoch小于1小时、峰值保留显存不超过9GB、系统CPU不持续饱和、无数值或资源停止、outer test不迭代
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 417a2c166e38a91811ad857f3e98c5feefe9f426
+    config:
+      path: configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml
+      source: git_blob_at_commit
+      sha256: 1f6908242864b404a360359a4cf8a2c1a801b86125997d39e1b2deb78f999f58
+    command: python tools/46_train_d0_abnormal_mil.py --config configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml --fold 0 --pilot --pilot-epochs 5
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; num_workers 0; two numeric threads
+    runtime: 0.1217013889 hours
+    oof: not_applicable_resource_pilot_outer_test_not_iterated
+    results:
+      patients: 767
+      images: 3789
+      epochs_completed: 5
+      best_validation_macro_f1_descriptive_only: 0.3980852481
+      best_epoch_descriptive_only: 4
+      cpu_samples_percent: [5.0, 5.5, 9.0, 7.2, 7.6]
+      peak_gpu_memory_allocated_gb: 1.2524290085
+      peak_gpu_memory_reserved_gb: 1.357421875
+      outer_test_iterated: false
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/D0-fold0-seed20260724-pilot_summary.json
+      summary_sha256: f8ae0c2fe3dfd3a3fcb2a3cfdae261ae08cbb8254e3e80b9291151665202ec09
+      history_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/logs/D0/fold_0_pilot_history.json
+      history_sha256: 8fdf783fe765af8e29c0a09cc2ace97817a48da1b79ab7a75d9acdd277fd3e81
+      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/best_pilot.pt
+      pilot_checkpoint_sha256: 099eed71ae15816c5953d22dfc34a81e54f3aa520714be26463b47d97dcf7c20
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [8de0c9e013fc4d1d8ae522b9c0cba0de]
+    mlflow_fold_run_ids: [5f9a364b76034c3587cf9b5f6f12f218]
+    markdown_report: docs/project/D0资源修订pilot结果_2026-08-26.md
+    failure_or_negative_reason: none_all_amended_resource_cpu_and_isolation_gates_passed
+    conclusion: 修订资源pilot通过，允许按原冻结配置独立启动正式五折；pilot分数不用于调参
+    next_step: 正式运行fold 0到4，不复用pilot checkpoint，不根据单折结果修改候选
+
+  - id: D0-abnormal-fiveclass-roi-mil-formal
+    kind: formal_model
+    status: completed_preregistered_gate_failed
+    research_question: 专用异常五分类ROI患者MIL是否稳定优于E2六分类模型的异常条件概率且满足类别安全、校准、注意力和资源门
+    preregistered_gate: OOF macro-F1至少0.3982914946且相对E2条件至少+0.03、配对CI下界大于0、至少4/5折正向、任类F1下降不超过0.05、五类F1均至少0.20、ECE不高于0.30、Brier不高于0.90、注意力塌缩不超过0.50及全部资源隔离哈希合同同时通过
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 417a2c166e38a91811ad857f3e98c5feefe9f426
+    config:
+      path: configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml
+      source: git_blob_at_commit
+      sha256: 1f6908242864b404a360359a4cf8a2c1a801b86125997d39e1b2deb78f999f58
+    command: python tools/46_train_d0_abnormal_mil.py --config configs/research/d0_roi_abnormal_fiveclass_mil_b2.yaml --fold FOLD && python tools/47_evaluate_d0_abnormal_oof.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; num_workers 0; two numeric threads
+    runtime_hours_by_fold: [0.4203602778, 0.4861761111, 0.5300780556, 0.5657769444, 0.4870961111]
+    peak_allocated_gpu_gb_by_fold: [1.2524290085, 1.2621202469, 1.2624330521, 1.2502431870, 1.2577848434]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_oof.csv
+      sha256: 2a0b17b232eaeea3df5d05331923d7e2015698b5b6b42cdbb64201bbc76404dd
+    additional_fold_oof:
+      - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_fold0.csv, sha256: 9d50a7ab3f6d02330c5acde32370339c62db61fca11295879d5d607e89ba802e}
+      - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_fold1.csv, sha256: 7c163fa50bbce479e22559f2255c465a7157db8bb5e856ba770384cae24f4283}
+      - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_fold2.csv, sha256: ef59c76dfddb24d66ffe7a4e0536a3f2ec84e2817a4f0bf6d70cde4836fc12e9}
+      - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_fold3.csv, sha256: 8768ee787424d9bba3f3820074296c63bd54ccc3d7503d204336cbdacf22d832}
+      - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/D0_fold4.csv, sha256: d1a695e313b4523b645761fba5f74bec76b1b59322053abcd8096c82cd862a99}
+    results:
+      patients: 767
+      d0_macro_f1: 0.4241758128
+      d0_macro_f1_ci95: [0.3838453902, 0.4630079623]
+      e2_conditional_macro_f1: 0.3682914946
+      delta_vs_e2_conditional: 0.0558843182
+      paired_delta_ci95: [0.0050117124, 0.1055387496]
+      positive_folds: 2
+      fold_macro_f1: [0.4376673410, 0.3552740609, 0.3405968254, 0.4562350544, 0.4202206387]
+      minimum_class_f1: 0.2266666667
+      injury_f1_delta_vs_e2: -0.0648442467
+      ece: 0.3544027205
+      multiclass_brier: 0.8492180126
+      pooled_attention_collapse_rate: 0.3139841689
+      resource_and_isolation_contract_passed: true
+      evaluator_source_path: src/research_abnormal_oof.py
+      evaluator_source_sha256: 0b705796b6d3ec1654a158328586c81f70ec103f0d24f53aec64535da8ba480c
+      result_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/D0-oof-evaluation.json
+      result_sha256: 14f1c9a6d3744cf2408fb5b70e63919f2ab005d2de3b85bbf064e43c20e2213e
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_0/best_formal.pt, sha256: c33d9e3c6fa6eb141cc22507e2ce779d03139267fe59b2357ea1bf933b127c50}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_1/best_formal.pt, sha256: bd784099847a7e5d8f207f5b55346fa66b5a0e22e5ebdd29fdf67aee8812ee1d}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_2/best_formal.pt, sha256: 56fad495954d1469a49ef28db5170866a37d575997fe1b69b82d0c466fcfcf0f}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_3/best_formal.pt, sha256: bb0976eb99e2d3784b5189f5899867da00934f7492a08afa179a8130c391aa38}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/D0/fold_4/best_formal.pt, sha256: b82ad0408171ad2f90e140bc2064f82b5ecbe2b57f7413aebbd78fcf853cdddc}
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [f0ff44ee363f4c2396318eddd4210969, 31aebea819a240599e2567c76e8ef382, 8679de89f9ac4e1692f7f5621228aae1, d7641842fcfd49b3916d04716c7b4e8c, 34e0228556984c418cae7e54b5df11ad]
+    mlflow_fold_run_ids: [677d4a0c4ee242e58cd4fccbd88425bb, 3139debc48e1438482ce904683861659, 1a27db381a9c4bd194134115bc330b86, b08eb7c641824bedb5710a35f985b9a4, 08bf2d532fad45f4b17a1a908bf48b8b]
+    markdown_report: docs/project/D0异常五分类ROI患者MIL五折结果_2026-08-26.md
+    failure_or_negative_reason: 仅2/5折优于E2条件概率；损伤F1下降0.0648超过0.05；ECE 0.3544超过0.30
+    conclusion: D0总体macro-F1和配对CI通过，但未同时通过折间、类别安全和校准门；D0不冻结，F0/F1不启动
+    next_step: 按ADR-018停止当前异常融合路线；等待新数据或直接采集元数据，或S1a/S1b形成新监督证据后重新预登记
