@@ -79,15 +79,100 @@ def render_markdown(report: dict) -> str:
     hierarchical = primary["hierarchical"]
     reference = report["reference_summary"]
 
+    def number(value: object, digits: int = 4) -> str:
+        return "NA" if value is None else f"{float(value):.{digits}f}"
+
     def metric_line(name: str, item: dict) -> str:
         metrics = item["metrics"]
         interval = item["macro_f1_95_ci"]
         return (
             f"| {name} | {metrics['macro_f1']:.4f} "
             f"[{interval[0]:.4f}, {interval[2]:.4f}] | {metrics['accuracy']:.4f} | "
-            f"{metrics['top2_accuracy']:.4f} | {metrics['ece']:.4f} | "
+            f"{metrics['balanced_accuracy']:.4f} | {metrics['top2_accuracy']:.4f} | "
+            f"{number(metrics['macro_auc'])} | {metrics['ece']:.4f} | "
             f"{metrics['multiclass_brier']:.4f} |"
         )
+
+    def per_class_rows() -> list[str]:
+        rows = []
+        for image_row, hierarchical_row in zip(
+            image["metrics"]["per_class"],
+            hierarchical["metrics"]["per_class"],
+            strict=True,
+        ):
+            rows.append(
+                "| {name} | {support} | {image_sensitivity} | {image_f1} | "
+                "{image_auc} | {hierarchical_sensitivity} | {hierarchical_f1} | "
+                "{hierarchical_auc} |".format(
+                    name=image_row["class_name"],
+                    support=image_row["support"],
+                    image_sensitivity=number(image_row["sensitivity"]),
+                    image_f1=number(image_row["f1"]),
+                    image_auc=number(image_row["auc"]),
+                    hierarchical_sensitivity=number(hierarchical_row["sensitivity"]),
+                    hierarchical_f1=number(hierarchical_row["f1"]),
+                    hierarchical_auc=number(hierarchical_row["auc"]),
+                )
+            )
+        return rows
+
+    def confusion_section(name: str, metrics: dict) -> list[str]:
+        classes = report["contract"]["classes"]
+        header = "| 真实\\预测 | " + " | ".join(classes) + " |"
+        separator = "|---|" + "---:|" * len(classes)
+        rows = [
+            "| " + class_name + " | " + " | ".join(str(value) for value in matrix_row) + " |"
+            for class_name, matrix_row in zip(
+                classes, metrics["confusion_matrix"], strict=True
+            )
+        ]
+        return [f"### {name}", "", header, separator, *rows, ""]
+
+    def confidence_rows(model_name: str, item: dict) -> list[str]:
+        rows = []
+        for group_name, key in (("低置信", "low_confidence_metrics"), ("非低置信", "high_confidence_metrics")):
+            metrics = item[key]
+            if metrics is None:
+                rows.append(f"| {model_name} | {group_name} | 0 | NA | NA | NA |")
+            else:
+                rows.append(
+                    f"| {model_name} | {group_name} | {metrics['patients']} | "
+                    f"{metrics['macro_f1']:.4f} | {metrics['accuracy']:.4f} | "
+                    f"{metrics['ece']:.4f} |"
+                )
+        return rows
+
+    def subgroup_rows() -> list[str]:
+        rows = []
+        for label, key in (
+            ("未见AI结果", "independent_not_ai_visible_descriptive"),
+            ("已见AI结果", "ai_visible_descriptive"),
+        ):
+            subgroup = report[key]
+            if subgroup.get("status") == "not_available":
+                rows.append(f"| {label} | 0 | NA | NA | NA | NA |")
+                continue
+            rows.append(
+                f"| {label} | {subgroup['patients']} | "
+                f"{subgroup['image']['metrics']['macro_f1']:.4f} | "
+                f"{subgroup['hierarchical']['metrics']['macro_f1']:.4f} | "
+                f"{subgroup['image']['metrics']['accuracy']:.4f} | "
+                f"{subgroup['hierarchical']['metrics']['accuracy']:.4f} |"
+            )
+        return rows
+
+    paired = primary["paired_hierarchical_minus_image_macro_f1"]
+    overlap = primary["correctness_overlap"]
+    provenance = []
+    for label, key in (
+        ("正式评价Git", "git_commit"),
+        ("评价配置SHA-256", "config_sha256"),
+        ("冻结预测manifest SHA-256", "prediction_manifest_sha256"),
+        ("冻结预测CSV SHA-256", "prediction_delivery_sha256"),
+        ("医院参考回表SHA-256", "reference_workbook_sha256"),
+    ):
+        if report.get(key):
+            provenance.append(f"- {label}：`{report[key]}`；")
 
     rows = [
         "# 2026时间外队列冻结评价结果",
@@ -105,23 +190,66 @@ def render_markdown(report: dict) -> str:
         "",
         "## 主要评价",
         "",
-        "| 输出 | macro-F1（95%CI） | Accuracy | Top-2 | ECE | Brier |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| 输出 | macro-F1（95%CI） | Accuracy | Balanced accuracy | Top-2 | Macro-AUC | ECE | Brier |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
         metric_line("图像单模态", image),
         metric_line("分层多模态", hierarchical),
         "",
-        "分层减图像macro-F1的配对bootstrap结果："
-        + json.dumps(
-            primary["paired_hierarchical_minus_image_macro_f1"],
-            ensure_ascii=False,
-        )
-        + "。",
+        (
+            "分层减图像macro-F1为"
+            f"{paired['observed_delta']:+.4f}，配对bootstrap 95%CI "
+            f"[{paired['ci_low']:+.4f}, {paired['ci_high']:+.4f}]，"
+            f"差值大于0的bootstrap比例为{paired['probability_delta_gt_zero']:.4f}。"
+        ),
         "",
-        "## 解释限制",
+        "这里同时保留两个冻结输出，不依据2026结果选择其中一个作为新的模型。",
         "",
-        "未见AI结果的独立复核亚组与已见AI结果亚组均只作预先规定的描述性报告；不得按亚组或模型结果择优。逐类指标、混淆矩阵、低/高置信亚组、参考诊断来源及完整冻结合同见同目录JSON。",
+        "## 逐类结果",
         "",
-        "本结果是合作研究评价，不构成临床独立诊断性能授权。",
+        "| 类别 | 支持数 | 图像灵敏度 | 图像F1 | 图像AUC | 分层灵敏度 | 分层F1 | 分层AUC |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        *per_class_rows(),
+        "",
+        "## 混淆矩阵",
+        "",
+        *confusion_section("图像单模态", image["metrics"]),
+        *confusion_section("分层多模态", hierarchical["metrics"]),
+        "## 低置信度分层",
+        "",
+        "| 输出 | 分组 | 患者数 | Macro-F1 | Accuracy | ECE |",
+        "|---|---|---:|---:|---:|---:|",
+        *confidence_rows("图像单模态", image),
+        *confidence_rows("分层多模态", hierarchical),
+        "",
+        "低置信标记只表示预登记的重点复核队列，不是安全拒识阈值。",
+        "",
+        "## AI可见性描述性亚组",
+        "",
+        "| 亚组 | 患者数 | 图像Macro-F1 | 分层Macro-F1 | 图像Accuracy | 分层Accuracy |",
+        "|---|---:|---:|---:|---:|---:|",
+        *subgroup_rows(),
+        "",
+        "未见AI结果与已见AI结果亚组只作预先规定的描述性报告，不作模型选择或主要人群替代。",
+        "",
+        "## 两个输出的正确性重叠",
+        "",
+        f"- 两者均正确：{overlap['both_correct']}；",
+        f"- 仅图像单模态正确：{overlap['image_only_correct']}；",
+        f"- 仅分层多模态正确：{overlap['hierarchical_only_correct']}；",
+        f"- 两者均错误：{overlap['both_wrong']}。",
+        "",
+        "## 冻结与复现",
+        "",
+        *provenance,
+        f"- Bootstrap：{report['contract']['bootstrap_samples']}次，种子`{report['contract']['bootstrap_seed']}`；",
+        f"- 校准分箱：{report['contract']['calibration_bins']}；",
+        "- 患者级连接结果保存在受保护目录，公开报告只含聚合统计。",
+        "",
+        "## 结论边界与医院验收",
+        "",
+        "本评价不设置单一机械性能通过线，也不自动给出医院项目通过或不通过结论。应结合macro-F1区间、逐类灵敏度/F1、混淆、校准、低置信亚组、参考诊断形成方式和医生实际复核意见，判断全自动研究流程是否达到项目可接受水平。",
+        "",
+        "若结果不足，不得在同一2026队列上调参后重新称为独立时间外验证；任何半自动补救或新模型都必须另立版本。本结果是合作研究评价，不构成临床独立诊断性能授权。",
     ]
     return "\n".join(rows) + "\n"
 

@@ -133,7 +133,6 @@ def validate_reference_rows(
         basis = _text(row.get(columns["diagnosis_basis"]))
         ai_visible = _text(row.get(columns["ai_visible"]))
         reviewer_role = _text(row.get(columns["reviewer_role"]))
-        review_date = _review_date(row.get(columns["review_date"]))
         note = _text(row.get(columns["note"]))
         prefix = f"患者{number}"
         if status not in allowed_statuses:
@@ -144,6 +143,7 @@ def validate_reference_rows(
             raise ValueError(f"{prefix}AI结果可见性不在冻结值域")
         if reviewer_role not in allowed_roles:
             raise ValueError(f"{prefix}复核者角色不在冻结值域")
+        review_date = _review_date(row.get(columns["review_date"]))
         if status == evaluable_status and diagnosis not in allowed_diagnoses:
             raise ValueError(f"{prefix}可评价但缺少合法六分类参考诊断")
         if status != evaluable_status and diagnosis:

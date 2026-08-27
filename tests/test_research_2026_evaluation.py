@@ -1,5 +1,6 @@
 from copy import deepcopy
 import csv
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,13 @@ from src.research_2026_evaluation import (
 
 
 ROOT = Path(__file__).resolve().parent.parent
+TOOL_SPEC = importlib.util.spec_from_file_location(
+    "tool_65_evaluate_2026_reference",
+    ROOT / "tools/65_evaluate_2026_reference.py",
+)
+assert TOOL_SPEC and TOOL_SPEC.loader
+TOOL_65 = importlib.util.module_from_spec(TOOL_SPEC)
+TOOL_SPEC.loader.exec_module(TOOL_65)
 
 
 def small_contract():
@@ -76,6 +84,12 @@ def test_validate_reference_rows_requires_complete_unique_consistent_return():
     contaminated[0]["复核时是否已见AI结果"] = "是"
     with pytest.raises(ValueError, match="矛盾"):
         validate_reference_rows(contaminated, contract)
+
+    incomplete = valid_rows()
+    incomplete[0]["参考状态"] = ""
+    incomplete[0]["复核日期"] = ""
+    with pytest.raises(ValueError, match="参考状态"):
+        validate_reference_rows(incomplete, contract)
 
 
 def test_non_evaluable_rows_must_not_leak_into_scored_reference():
@@ -197,3 +211,21 @@ def test_frozen_evaluation_reports_both_modes_and_blinding_subgroups():
     assert report["independent_not_ai_visible_descriptive"]["patients"] == 5
     assert report["ai_visible_descriptive"]["patients"] == 1
     assert len(joined) == 6
+
+    report.update(
+        {
+            "git_commit": "a" * 40,
+            "config_sha256": "b" * 64,
+            "prediction_manifest_sha256": "c" * 64,
+            "prediction_delivery_sha256": "d" * 64,
+            "reference_workbook_sha256": "e" * 64,
+        }
+    )
+    markdown = TOOL_65.render_markdown(report)
+    assert "## 逐类结果" in markdown
+    assert "## 混淆矩阵" in markdown
+    assert "## 低置信度分层" in markdown
+    assert "## AI可见性描述性亚组" in markdown
+    assert "## 两个输出的正确性重叠" in markdown
+    assert "不设置单一机械性能通过线" in markdown
+    assert "医院参考回表SHA-256" in markdown
