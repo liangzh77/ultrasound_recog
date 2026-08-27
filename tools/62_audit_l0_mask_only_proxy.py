@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -50,6 +51,26 @@ def sha256_file(path: Path) -> str:
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def require_clean_git() -> str:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if status:
+        raise RuntimeError("Formal L0 mask-only proxy audit requires a clean Git worktree")
+    return revision
 
 
 def build_patient_features(
@@ -144,6 +165,7 @@ def load_oof_probabilities(path: Path) -> dict[str, np.ndarray]:
 
 
 def main() -> int:
+    git_commit = require_clean_git()
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     if config.get("status") != "frozen_method_preregistered_before_l0_classification_results":
         raise ValueError("Mask-only proxy method must be frozen")
@@ -258,6 +280,8 @@ def main() -> int:
     report = {
         "status": "completed_descriptive_bias_proxy_not_model_selection",
         "experiment_code": "L0-mask-only-proxy",
+        "git_commit": git_commit,
+        "git_dirty_at_start": False,
         "data_fingerprint": config["data_fingerprint"],
         "config_path": CONFIG_PATH.relative_to(ROOT).as_posix(),
         "config_sha256": sha256_file(CONFIG_PATH),
@@ -307,4 +331,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
