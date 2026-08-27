@@ -1,0 +1,69 @@
+experiment_code: R2
+status: preregistered_waiting_for_R0_R1_route_decision
+study_id: knee_patient_multimodal_v2_20260827
+approved_on: '2026-08-27'
+cohort:
+  patients: 225
+  images: 1819
+  image_root: workspace/data/raw/膝关节2026未标注
+  clinical_workbook: workspace/data/raw/膝关节2026未标注/膝关节2026.xlsx
+  clinical_workbook_sha256: f319b2d6c4e34605b94e62df6b44ab85c323f219d738d9c746d0d0527dfd2165
+  patient_identifier: integer_1_to_225
+  labels_available_to_pipeline: false
+route:
+  selected: pending_R1_development_only
+  full_auto_condition: R1_auto_roi_classification_effect_is_acceptable_after_case_review
+  semi_auto_condition: R1_auto_roi_harms_classification_but_manual_roi_remains_usable
+  selection_may_use_2026: false
+auto_roi_ensemble:
+  members: R0_fold_0_to_4_formal_best_checkpoints
+  member_box: highest_confidence_detection
+  aggregation: coordinate_wise_median_over_available_member_boxes
+  no_member_detection_policy: full_image_fallback_and_flag
+  clamp_to_image_bounds: true
+  checkpoint_hash_source: R0_formal_training_summaries
+manual_roi_contract:
+  required_only_when_route_is_semi_auto: true
+  unit: original_image_pixels
+  fields: [patient_id, image_name, x1, y1, x2, y2]
+  validation: exact_image_coverage_unique_valid_nonempty_boxes
+image_classifier_ensemble:
+  code: E1
+  aggregation_within_member: mean_image_probabilities_per_patient
+  aggregation_across_members: equal_mean_of_five_patient_probability_vectors
+  input_preprocessing: proportional_letterbox_384_no_margin
+  checkpoints:
+    0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_0/best_formal.pt, sha256: 2531b9928f0f3f6092d9280b68390af336734a03e678a0c612d3bc4801408d07}
+    1: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_1/best_formal.pt, sha256: f38dd6a25b9517e91bbb3865373abb465a6a87a5c2cf02cae5d99de43dc3b7e1}
+    2: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_2/best_formal.pt, sha256: 065f21415b5b541f324abd1cfb8bf1419f3345a668fd024a7e5c9b72ebd57a98}
+    3: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_3/best_formal.pt, sha256: 92b552e839b120ae0067dc8ab9eefd34b0fb004ace8acecc9ff96e11456b2958}
+    4: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_4/best_formal.pt, sha256: 77d0b7209452ef80cceed120dbd38b90dd3816fb6e2f00d818d8ac18f3732e0b}
+clinical_ensemble:
+  code: C3
+  features: [sex, age_years, esr_mm_h, crp_mg_l, anti_ccp_u_ml, rf_iu_ml, hla_b27, uric_acid]
+  forbidden_fields: [patient_id, diagnosis, disease_duration, date, path, filename, missingness_indicators]
+  preprocessing_contract: configs/research/c0_c4_clinical_logreg.yaml
+  aggregation: equal_mean_of_five_conditional_probability_vectors
+  models:
+    0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_0_model.joblib, sha256: 112413a2fc26eb9fe6d7ab9f1cbee2c8c8d95a25a9ebee99510edb719fd297ad}
+    1: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_1_model.joblib, sha256: 1ee059f94313c9c6e726be44a409bead327ec1ff0997110360b134136a0fd5bc}
+    2: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_2_model.joblib, sha256: f853f32bdea97c5db844dae475cca06925ba6e941b1981344414837dab8628f1}
+    3: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_3_model.joblib, sha256: e53ba10fea05b7eee4056f67d2ca89955f95a285f5f61dbd8678216e72af3f78}
+    4: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/clinical/C3/fold_4_model.joblib, sha256: e5c86d1bb69d926526af79d0e34a5b5b7ebfd9a0f78ca51459f37715f0bc649d}
+outputs:
+  class_order: [normal, ra, ga, spa, oa, injury]
+  image_only: E1_fivefold_mean_sixclass_probabilities
+  hierarchical_multimodal:
+    normal_probability: image_only_normal_probability
+    abnormal_probabilities: one_minus_normal_probability_times_C3_conditional_probabilities
+  include: [top1, top2, six_probabilities, confidence_flag, roi_result]
+  confidence_flag: top1_probability_below_0_50_or_top1_top2_margin_below_0_10
+controls:
+  prohibit_new_architecture: true
+  prohibit_checkpoint_search: true
+  prohibit_weight_search: true
+  prohibit_threshold_tuning_on_2026: true
+  prohibit_using_2026_reference_diagnosis_before_prediction_freeze: true
+  generate_formal_prediction_once: true
+  prediction_manifest_must_include_all_artifact_hashes: true
+
