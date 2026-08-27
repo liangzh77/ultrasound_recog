@@ -500,11 +500,13 @@ def load_clinical_table(path: Path) -> list[dict[str, str]]:
     return rows
 
 
-def _feature_matrix(
+def clinical_feature_matrix(
     rows: Sequence[Mapping[str, str]],
     features: Sequence[str],
     hla_missing_value: float,
 ) -> np.ndarray:
+    """Build a numeric matrix using the frozen clinical missing-value contract."""
+
     matrix = []
     for row in rows:
         values = []
@@ -737,12 +739,12 @@ def run_clinical_baselines(
                             encoding="utf-8",
                         )
                     else:
-                        train_matrix = _feature_matrix(
+                        train_matrix = clinical_feature_matrix(
                             train_rows,
                             features,
                             float(config["feature_contract"]["hla_b27_missing_value"]),
                         )
-                        test_matrix = _feature_matrix(
+                        test_matrix = clinical_feature_matrix(
                             test_rows,
                             features,
                             float(config["feature_contract"]["hla_b27_missing_value"]),

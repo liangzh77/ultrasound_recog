@@ -8,6 +8,7 @@ from src.research_clinical import (
     ALLOWED_MODEL_FEATURES,
     CLINICAL_CLASSES,
     build_logistic_pipeline,
+    clinical_feature_matrix,
     compare_clinical_oof,
     evaluate_clinical_oof,
     load_clinical_config,
@@ -136,6 +137,18 @@ def test_preprocessing_fits_training_data_and_returns_all_classes():
     probabilities = pipeline.predict_proba(matrix[:3])
     assert probabilities.shape == (3, len(CLINICAL_CLASSES))
     assert np.allclose(probabilities.sum(axis=1), 1.0)
+
+
+def test_clinical_feature_matrix_preserves_frozen_hla_missing_value():
+    rows = [
+        {"sex": "0", "age_years": "30", "hla_b27": ""},
+        {"sex": "1", "age_years": "", "hla_b27": "1"},
+    ]
+    matrix = clinical_feature_matrix(
+        rows, ("sex", "age_years", "hla_b27"), hla_missing_value=0.5
+    )
+    assert matrix[0].tolist() == [0.0, 30.0, 0.5]
+    assert matrix[1, 0] == 1.0 and np.isnan(matrix[1, 1]) and matrix[1, 2] == 1.0
 
 
 def test_clinical_oof_rejects_duplicate_or_incomplete_patient_coverage():

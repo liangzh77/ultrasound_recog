@@ -1,7 +1,11 @@
+import runpy
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from src.research_auto_roi import ROIBox
+from src.research_clinical import CENSOR_FEATURES, MISSING_FEATURES
 from src.research_frozen_inference import (
     audit_numbered_image_cohort,
     confidence_flag,
@@ -61,3 +65,27 @@ def test_audit_numbered_image_cohort_checks_exact_coverage(tmp_path):
     with pytest.raises(ValueError, match="expected 2 blind images"):
         audit_numbered_image_cohort(tmp_path, expected_patients=2, expected_images=2)
 
+
+def test_2026_c3_component_rejects_any_unregistered_feature_column():
+    tool = runpy.run_path(
+        Path(__file__).resolve().parent.parent / "tools/58_infer_2026_c3_ensemble.py"
+    )
+    features = (
+        "sex",
+        "age_years",
+        "esr_mm_h",
+        "crp_mg_l",
+        "anti_ccp_u_ml",
+        "rf_iu_ml",
+        "hla_b27",
+        "uric_acid",
+    )
+    row = {
+        column: ""
+        for column in ("person_key", *features, *MISSING_FEATURES, *CENSOR_FEATURES)
+    }
+    row["person_key"] = "KNEE_R2_TEST"
+    tool["_validate_feature_rows"]([row], features, expected_patients=1)
+    row["diagnosis"] = "forbidden"
+    with pytest.raises(ValueError, match="columns differ"):
+        tool["_validate_feature_rows"]([row], features, expected_patients=1)
