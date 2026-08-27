@@ -13,7 +13,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.research_auto_roi import ROIBox, load_r0_config, read_csv_rows  # noqa: E402
+from src.research_auto_roi import (  # noqa: E402
+    ROIBox,
+    load_r0_config,
+    read_csv_rows,
+    sha256_file,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -125,6 +130,7 @@ def main() -> int:
         "primary_decision_basis": "downstream_patient_classification",
         "contains_raw_paths": False,
         "checkpoint": checkpoint.name,
+        "checkpoint_sha256": sha256_file(checkpoint),
     }
     summary_path = report_dir / f"R0_fold_{args.fold}_oof_roi_summary.json"
     summary_path.write_text(
@@ -137,4 +143,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
