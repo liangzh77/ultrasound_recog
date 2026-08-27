@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 import yaml
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,35 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def descriptive_distribution(values: Iterable[float]) -> dict[str, float | int | None]:
+    array = np.asarray(list(values), dtype=np.float64)
+    if array.size == 0:
+        return {
+            "n": 0,
+            "mean": None,
+            "median": None,
+            "minimum": None,
+            "q05": None,
+            "q25": None,
+            "q75": None,
+            "q95": None,
+            "maximum": None,
+        }
+    if not np.isfinite(array).all():
+        raise ValueError("descriptive values must be finite")
+    return {
+        "n": int(array.size),
+        "mean": float(np.mean(array)),
+        "median": float(np.median(array)),
+        "minimum": float(np.min(array)),
+        "q05": float(np.quantile(array, 0.05)),
+        "q25": float(np.quantile(array, 0.25)),
+        "q75": float(np.quantile(array, 0.75)),
+        "q95": float(np.quantile(array, 0.95)),
+        "maximum": float(np.max(array)),
+    }
 
 
 def load_r0_config(path: Path) -> dict:

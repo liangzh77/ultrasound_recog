@@ -2,7 +2,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from src.research_auto_roi import ROIBox, materialize_yolo_dataset, sha256_file
+from src.research_auto_roi import (
+    ROIBox,
+    descriptive_distribution,
+    materialize_yolo_dataset,
+    sha256_file,
+)
 
 
 def test_roi_box_yolo_conversion_and_iou():
@@ -49,3 +54,12 @@ def test_sha256_file_is_stable(tmp_path: Path):
     artifact = tmp_path / "artifact.bin"
     artifact.write_bytes(b"automatic-roi")
     assert sha256_file(artifact) == "8d0d38c12984170166adcc404cc4946eb886080c893df064303ef7721cfaf915"
+
+
+def test_descriptive_distribution_keeps_continuous_geometry_without_gate():
+    summary = descriptive_distribution([0.2, 0.4, 0.6, 0.8])
+    assert summary["n"] == 4
+    assert summary["mean"] == 0.5
+    assert summary["median"] == 0.5
+    assert "passed" not in summary
+    assert descriptive_distribution([])["median"] is None
