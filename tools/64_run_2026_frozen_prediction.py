@@ -97,7 +97,6 @@ def infer_rois(
     r0_config = yaml.safe_load((ROOT / base["path"]).read_text(encoding="utf-8"))
     ordered_keys = sorted(public)
     source_files = [(ROOT / sources[key]["raw_image_path"]).resolve() for key in ordered_keys]
-    path_to_key = {str(path).casefold(): key for path, key in zip(source_files, ordered_keys, strict=True)}
     boxes_by_image: dict[str, list[ROIBox]] = defaultdict(list)
     confidences_by_image: dict[str, list[float]] = defaultdict(list)
     model_manifest = []
@@ -112,19 +111,24 @@ def infer_rois(
             raise ValueError("R0 inference batch size must be positive")
         for start in range(0, len(source_files), batch_size):
             batch_files = source_files[start : start + batch_size]
-            results = model.predict(
-                source=[str(path) for path in batch_files],
-                imgsz=int(r0_config["model"]["image_size"]),
-                conf=float(contract["inference_confidence"]),
-                device=r0_config["runtime"]["device"],
-                batch=batch_size,
-                stream=True,
-                verbose=False,
+            batch_keys = ordered_keys[start : start + batch_size]
+            results = list(
+                model.predict(
+                    source=[str(path) for path in batch_files],
+                    imgsz=int(r0_config["model"]["image_size"]),
+                    conf=float(contract["inference_confidence"]),
+                    device=r0_config["runtime"]["device"],
+                    batch=batch_size,
+                    stream=True,
+                    verbose=False,
+                )
             )
-            for result in results:
-                key = path_to_key.get(str(Path(result.path).resolve()).casefold())
-                if key is None or key in seen:
-                    raise ValueError("R0 returned an unknown or duplicate 2026 image")
+            if len(results) != len(batch_keys):
+                raise ValueError("R0 result count differs from the frozen input batch")
+            for key, result in zip(batch_keys, results, strict=True):
+                expected_shape = (int(public[key]["height"]), int(public[key]["width"]))
+                if tuple(result.orig_shape) != expected_shape or key in seen:
+                    raise ValueError("R0 result order or image shape differs from input")
                 seen.add(key)
                 boxes = result.boxes
                 if boxes is None or len(boxes) == 0:
