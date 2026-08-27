@@ -24,6 +24,8 @@ auto_roi_ensemble:
   aggregation: coordinate_wise_median_over_available_member_boxes
   no_member_detection_policy: full_image_fallback_and_flag
   clamp_to_image_bounds: true
+  inference_confidence: 0.01
+  preprocessing_config: {path: configs/research/r0_auto_ultrasound_view_roi.yaml, sha256: d073f9c63d6620d123b18ec6e5ecb513c3cf1f4db5f117e5d3860b542c6ee768}
   checkpoint_hash_source: R0_formal_training_summaries
   checkpoints:
     0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_0_formal/weights/best.pt, sha256: 037fab2e1b2ebff45ac2987965f081ddbae8acb21c6ee9fa9926dc0db7d33fdd}
@@ -38,6 +40,7 @@ manual_roi_contract:
   validation: exact_image_coverage_unique_valid_nonempty_boxes
 image_classifier_ensemble:
   code: E1
+  preprocessing_config: {path: configs/research/e1_roi_mean_b2.yaml, sha256: 52f1cb65261a95088e6d27207f1e9c4498d291ba7c87668b27ea08f336176872}
   aggregation_within_member: mean_image_probabilities_per_patient
   aggregation_across_members: equal_mean_of_five_patient_probability_vectors
   input_preprocessing: proportional_letterbox_384_no_margin_with_frozen_fold_fill
