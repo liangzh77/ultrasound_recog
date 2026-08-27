@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T20:10:00+08:00
+updated_at: 2026-08-27T22:30:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,47 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: R2-2026-frozen-blind-prediction-formal
+    kind: formal_blind_prediction
+    status: completed_frozen_waiting_for_hospital_reference_review
+    research_question: 冻结R0自动有效视野、E1图像六分类和C3异常条件五分类能否在不读取2026参考诊断的前提下形成完整可审计的患者级研究预测
+    preregistered_gate: 225名患者、1819张图和225行临床特征完整连接；全部冻结模型与预处理哈希一致；不读取参考诊断；同时保留图像单模态和既定分层公式结果；不以2026选择路线、模型、权重或阈值
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 343913d9d2adc26b8a2954aeee827f1ce7e3d5e9
+    config:
+      path: configs/research/r2_2026_frozen_inference.yaml
+      source: git_blob_at_commit
+      sha256: 09a4e3bb54122cc37b76a9bd40316339da7600cad40410c24b65c39bd9a52acc
+    command: python tools/64_run_2026_frozen_prediction.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_frozen_r0_e1_c3_ensemble_inference
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; R0 batch size 8; E1 batch size 16
+    oof: not_applicable_time_external_prediction_reference_labels_hidden
+    results:
+      patients: 225
+      images: 1819
+      roi_images_with_all_five_members: 1819
+      roi_full_image_fallback_images: 0
+      image_low_confidence_patients: 225
+      hierarchical_low_confidence_patients: 41
+      image_top1_counts: {normal: 0, ra: 159, ga: 34, spa: 0, oa: 32, injury: 0}
+      hierarchical_top1_counts: {normal: 0, ra: 81, ga: 34, spa: 17, oa: 75, injury: 18}
+      reference_diagnoses_read: false
+      route_selection_affected_by_2026: false
+      patient_probabilities_publicly_reported: false
+      clinical_use_authorized: false
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/r2_2026/2026_formal_prediction_manifest.json
+      report_sha256: 4c29f1665a5510206ee90afa7611d9dc89a373f81bfd991cb895f79f3f43c43f
+      hospital_delivery_sha256: 4454eeaccb73ede923a2e7bdb96e96fbb15cf4a025694a5956ed63264be6dfbb
+      hospital_roi_delivery_sha256: f446f23f2afae1a1907e3a2235eb81d3d92f0236160857f0cb1960422b27d144
+      delivery_workbook_sha256: ef911f226d6323b4cc7aa04803a1d21dd1e5ca8648347ddd91a4d68cb324c008
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/2026冻结研究预测生成与医院交付结果_2026-08-27.md
+    failure_or_negative_reason: 尚无医院参考诊断，不能报告真实性能；图像单模态225人全部低置信且两个输出均无正常Top1，需作为预先标记的重点复核风险
+    conclusion: 冻结预测工程与盲法合同完成，不需要医院补人工ROI或病灶轮廓；输出只构成待复核研究结果，不构成临床独立诊断
+    next_step: 医院独立返回患者编号1至225的结构化六分类参考诊断后，按冻结评价合同一次性报告总体、逐类、校准与低置信亚组结果
+
   - id: L1-l0-c3-fixed-abnormal-fusion-formal
     kind: formal_oof_audit
     status: completed_gate_failed_route_closed
