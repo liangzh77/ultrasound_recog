@@ -36,6 +36,7 @@ C3_CONFIG_PATH = ROOT / "configs/research/c0_c4_clinical_logreg.yaml"
 PRIVATE_DIR = PATIENT_MULTIMODAL_REGISTRY_DIR / "private" / "r2_2026"
 FEATURE_PATH = PRIVATE_DIR / "2026_clinical_features.csv"
 FEATURE_AUDIT_PATH = PATIENT_MULTIMODAL_REPORTS_DIR / "r2_2026" / "2026_clinical_feature_audit.json"
+IMAGE_MANIFEST_PATH = PATIENT_MULTIMODAL_REPORTS_DIR / "r2_2026" / "2026_images_public.csv"
 OUTPUT_PATH = PRIVATE_DIR / "2026_c3_conditional_probabilities.csv"
 REPORT_PATH = PATIENT_MULTIMODAL_REPORTS_DIR / "r2_2026" / "2026_c3_component_manifest.json"
 
@@ -66,7 +67,9 @@ def _git_revision() -> tuple[str, bool]:
 
 
 def _validate_feature_rows(
-    rows: list[dict[str, str]], expected_features: tuple[str, ...], expected_patients: int
+    rows: list[dict[str, str]],
+    expected_features: tuple[str, ...],
+    expected_person_keys: set[str],
 ) -> None:
     expected_columns = (
         "person_key",
@@ -77,10 +80,10 @@ def _validate_feature_rows(
     if not rows or tuple(rows[0]) != expected_columns:
         raise ValueError("2026 clinical feature columns differ from the frozen C3 order")
     keys = [row["person_key"] for row in rows]
-    if len(rows) != expected_patients or len(keys) != len(set(keys)):
+    if len(rows) != len(expected_person_keys) or len(keys) != len(set(keys)):
         raise ValueError("2026 clinical features must cover each blind patient exactly once")
-    if any(not key.startswith("KNEE_R2_") for key in keys):
-        raise ValueError("2026 clinical features contain an unexpected patient key")
+    if set(keys) != expected_person_keys:
+        raise ValueError("2026 clinical and image patient keys differ")
 
 
 def _load_member(
@@ -149,9 +152,12 @@ def main() -> int:
         raise ValueError("2026 feature audit does not preserve diagnosis blinding")
 
     rows = _read_csv(FEATURE_PATH)
-    _validate_feature_rows(
-        rows, expected_features, int(r2_config["cohort"]["patients"])
-    )
+    image_rows = _read_csv(IMAGE_MANIFEST_PATH)
+    image_person_keys = {row["person_key"] for row in image_rows}
+    expected_patients = int(r2_config["cohort"]["patients"])
+    if len(image_person_keys) != expected_patients:
+        raise ValueError("2026 image manifest does not cover the frozen patient count")
+    _validate_feature_rows(rows, expected_features, image_person_keys)
     matrix = clinical_feature_matrix(
         rows,
         expected_features,
@@ -188,6 +194,7 @@ def main() -> int:
         "classes": list(CLINICAL_CLASSES),
         "aggregation": "equal_mean_of_five_conditional_probability_vectors",
         "feature_table_sha256": feature_sha,
+        "public_image_manifest_sha256": sha256_file(IMAGE_MANIFEST_PATH),
         "model_manifest": model_manifest,
         "private_prediction_sha256": sha256_file(OUTPUT_PATH),
         "git_commit": revision,

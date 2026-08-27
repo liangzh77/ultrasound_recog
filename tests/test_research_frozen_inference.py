@@ -85,7 +85,30 @@ def test_2026_c3_component_rejects_any_unregistered_feature_column():
         for column in ("person_key", *features, *MISSING_FEATURES, *CENSOR_FEATURES)
     }
     row["person_key"] = "KNEE_R2_TEST"
-    tool["_validate_feature_rows"]([row], features, expected_patients=1)
+    tool["_validate_feature_rows"]([row], features, {"KNEE_R2_TEST"})
     row["diagnosis"] = "forbidden"
     with pytest.raises(ValueError, match="columns differ"):
-        tool["_validate_feature_rows"]([row], features, expected_patients=1)
+        tool["_validate_feature_rows"]([row], features, {"KNEE_R2_TEST"})
+
+
+def test_2026_c3_component_requires_exact_image_clinical_patient_join():
+    tool = runpy.run_path(
+        Path(__file__).resolve().parent.parent / "tools/58_infer_2026_c3_ensemble.py"
+    )
+    features = (
+        "sex",
+        "age_years",
+        "esr_mm_h",
+        "crp_mg_l",
+        "anti_ccp_u_ml",
+        "rf_iu_ml",
+        "hla_b27",
+        "uric_acid",
+    )
+    row = {
+        column: ""
+        for column in ("person_key", *features, *MISSING_FEATURES, *CENSOR_FEATURES)
+    }
+    row["person_key"] = "CLINICAL_KEY"
+    with pytest.raises(ValueError, match="clinical and image patient keys differ"):
+        tool["_validate_feature_rows"]([row], features, {"IMAGE_KEY"})
