@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T16:55:00+08:00
+updated_at: 2026-08-27T17:15:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,65 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: R1-auto-roi-classification-sensitivity-formal
+    kind: formal_oof_audit
+    status: completed_auto_effective_view_selected_diagnosis_still_insufficient
+    research_question: 严格患者隔离的自动有效视野ROI替换人工ROI后，冻结E1患者级六分类结果如何变化
+    preregistered_gate: 不设几何或性能硬门；以自动减人工macro-F1配对bootstrap、逐类影响、无检测兜底和固定87名病例审阅综合选择有效视野路线，禁止重训分类器或使用2026
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: c19acb84f9ea6bc16d06078629ae29df1a8d1419
+    config:
+      path: configs/research/r1_auto_roi_classification_sensitivity.yaml
+      source: git_blob_at_commit
+      sha256: 8b1009b8e843e979a2af8bb0bec50e5bc4f01b6f07ad235b26b652d4028c9083
+    command: python tools/53_infer_e1_with_auto_roi.py --fold FOLD && python tools/54_evaluate_r1_auto_roi_classification.py && python tools/59_render_r1_case_review.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260827, 20260828, 20260829, 20260830, 20260831]
+    pretrained_sha256: not_applicable_frozen_e1_checkpoint_inference
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; CUDA inference
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_oof.csv
+      sha256: b3c34ea1ed7371439aeb879178730bca2085e9230c8e0c6f27bcbc71ecb5655f
+    additional_fold_oof:
+      - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_fold0.csv, sha256: 6de04de8d2bfe64c1dce8bff6d9d2c4d9989e99079b61bdf74db799f61e38d03}
+      - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_fold1.csv, sha256: f23ef0999c468a2ee7449c96b38447cbc313ae05a6b9cddebcf82279a8c3ef1b}
+      - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_fold2.csv, sha256: 52bbefcb1c4067cd73c7f9d6e54ce2b5c7eddf79ed00e8f1dab69997711c2b8c}
+      - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_fold3.csv, sha256: 2cd78e3a54f543dec079560faec5ca44fc6198f6728810bfba41b19c1407d2df}
+      - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/R1_fold4.csv, sha256: b486c48a803f5a89fe408c7d9a0892d3375170530023d6d7108b81d0d1671fae}
+    results:
+      patients: 967
+      images: 4543
+      automatic_roi_detections: 4543
+      full_image_fallbacks: 0
+      classifier_retrained: false
+      manual_roi_macro_f1: 0.2155169150
+      automatic_roi_macro_f1: 0.2189088598
+      paired_delta_auto_minus_manual: 0.0033919448
+      paired_delta_ci95: [-0.0119828447, 0.0193533756]
+      automatic_roi_top2_accuracy: 0.5243019648
+      automatic_roi_ece: 0.1377138109
+      changed_top1_patients: 132
+      manual_correct_auto_wrong: 33
+      manual_wrong_auto_correct: 35
+      reviewed_patients: 87
+      reviewed_images: 363
+      systematic_roi_content_loss_found: false
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R1_classification_sensitivity.json
+      report_sha256: 2a91ac67c532e297185def160de08f3efe45409bbfe5330848ef0b67d137fd66
+      changed_patient_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R1_changed_patient_predictions.csv
+      changed_patient_sha256: b3a40799e4f09f3dff4da730f06aee7ebc763195feac682f89f8aa4573665af6
+      case_review_queue_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R1_case_review_queue.csv
+      case_review_queue_sha256: a914a544622d1cb74384d825f0987b1df1541f6fd573fb66811bb0eafbcbb965
+      case_review_images_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R1_case_review_images.csv
+      case_review_images_sha256: 504d10905355e75af5122dd8072db652b880f5b08141d8f2babbe448451c6437
+      visualization_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R1_case_review_visualization_summary.json
+      visualization_summary_sha256: 70235f8e761c8d52d9b89511c2d3d651d33ea69ab0beacba1c1e0ec6b3781f46
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/R1自动ROI分类影响敏感性分析结果_2026-08-27.md
+    failure_or_negative_reason: 自动ROI相对人工ROI无有意义损害且无系统定位故障，但两者绝对macro-F1约0.22、损伤F1为0，不能冻结为临床独立诊断模型
+    conclusion: 冻结R0作为自动有效视野来源且不要求医生补有效视野矩形；继续L0病灶轮廓辅助研究，禁止把R1写成全自动诊断成功
+    next_step: 提交R1结果与ADR-021后，从洁净Git启动L0正式五折和预登记mask-only代理审计；2026继续隔离
+
   - id: L0-fold0-resource-pilot
     kind: resource_pilot
     status: completed_all_resource_and_isolation_gates_passed
