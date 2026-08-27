@@ -1,0 +1,55 @@
+experiment_code: R1
+status: preregistered_waiting_for_r0_oof
+study_id: knee_patient_multimodal_v2_20260827
+approved_on: '2026-08-27'
+research_question: 严格OOF自动有效视野ROI替换人工ROI后，冻结E1患者级六分类结果如何变化
+seed: 20260827
+base_experiment:
+  code: E1
+  config_path: configs/research/e1_roi_mean_b2.yaml
+  config_sha256: 52f1cb65261a95088e6d27207f1e9c4498d291ba7c87668b27ea08f336176872
+  aggregation: mean_probability
+  input_mode: roi
+  manual_oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_oof.csv
+  checkpoints:
+    0:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_0/best_formal.pt
+      sha256: 2531b9928f0f3f6092d9280b68390af336734a03e678a0c612d3bc4801408d07
+    1:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_1/best_formal.pt
+      sha256: f38dd6a25b9517e91bbb3865373abb465a6a87a5c2cf02cae5d99de43dc3b7e1
+    2:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_2/best_formal.pt
+      sha256: 065f21415b5b541f324abd1cfb8bf1419f3345a668fd024a7e5c9b72ebd57a98
+    3:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_3/best_formal.pt
+      sha256: 92b552e839b120ae0067dc8ab9eefd34b0fb004ace8acecc9ff96e11456b2958
+    4:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_4/best_formal.pt
+      sha256: 77d0b7209452ef80cceed120dbd38b90dd3816fb6e2f00d818d8ac18f3732e0b
+candidate_input:
+  roi_source: R0_strict_outer_fold_oof
+  pattern: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R0_fold_{fold}_oof_roi.csv
+  no_detection_policy: full_image_fallback_and_flag
+  retrain_classifier: false
+evaluation:
+  patients: 967
+  outer_folds: [0, 1, 2, 3, 4]
+  primary_metric: macro_f1
+  paired_comparison: auto_roi_minus_manual_roi
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260827
+  report_metrics: [macro_f1, per_class_sensitivity, per_class_f1, confusion_matrix, top2_accuracy, ece]
+  geometry_is_descriptive_only: true
+  hard_pass_gate: false
+  decision_basis: effect_size_confidence_interval_per_class_impact_and_case_review
+controls:
+  prohibit_classifier_retraining_before_sensitivity_result: true
+  prohibit_checkpoint_search: true
+  prohibit_threshold_tuning: true
+  prohibit_using_2026_for_route_selection: true
+privacy:
+  allow_raw_paths_in_public_outputs: false
+  allow_source_filenames_in_public_outputs: false
+  allow_2026_labels: false
+
