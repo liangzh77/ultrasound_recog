@@ -8,7 +8,9 @@ from src.research_dataset import (
     PatientBagDataset,
     ResearchImageDataset,
     ResearchImageRecord,
+    UnlabeledPatientBagDataset,
     collate_patient_bags,
+    collate_unlabeled_patient_bags,
     estimate_letterbox_fill,
     load_fold_records,
     select_patient_instances,
@@ -139,6 +141,22 @@ def test_variable_patient_bags_are_padded_with_a_boolean_mask(tmp_path):
         torch.tensor([[True, True], [True, False]]),
     )
     assert batch["targets"].tolist() == [0, 1]
+
+
+def test_unlabeled_patient_bags_do_not_create_targets(tmp_path):
+    records = [
+        make_record(tmp_path, image_key=f"A{index}", person_key="A", label=0)
+        for index in range(2)
+    ]
+    images = ResearchImageDataset(records, input_mode="roi", output_size=8)
+    bags = UnlabeledPatientBagDataset(images)
+
+    item = bags[0]
+    batch = collate_unlabeled_patient_bags([item])
+
+    assert "target" not in item
+    assert "targets" not in batch
+    assert batch["instance_mask"].sum().item() == 2
 
 
 def test_registry_loader_uses_inner_split_and_private_paths(tmp_path):

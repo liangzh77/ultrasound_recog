@@ -289,6 +289,39 @@ class PatientBagDataset(Dataset):
         }
 
 
+class UnlabeledPatientBagDataset(Dataset):
+    """Group every available image by patient without creating placeholder targets."""
+
+    def __init__(self, image_dataset: ResearchImageDataset) -> None:
+        self.image_dataset = image_dataset
+        groups: dict[str, list[int]] = defaultdict(list)
+        for index, record in enumerate(image_dataset.records):
+            groups[record.person_key].append(index)
+        if not groups:
+            raise ValueError("Unlabeled patient dataset cannot be empty")
+        self.person_keys = sorted(groups)
+        self.indices_by_person = groups
+
+    def __len__(self) -> int:
+        return len(self.person_keys)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        person_key = self.person_keys[index]
+        records = sorted(
+            (
+                self.image_dataset.records[item]
+                for item in self.indices_by_person[person_key]
+            ),
+            key=lambda record: record.image_key,
+        )
+        tensors = [self.image_dataset.load_tensor(record) for record in records]
+        return {
+            "images": torch.stack(tensors),
+            "person_key": person_key,
+            "image_keys": [record.image_key for record in records],
+        }
+
+
 def collate_patient_bags(items: list[dict[str, Any]]) -> dict[str, Any]:
     if not items:
         raise ValueError("Cannot collate an empty batch")
@@ -307,6 +340,30 @@ def collate_patient_bags(items: list[dict[str, Any]]) -> dict[str, Any]:
         "images": images,
         "instance_mask": mask,
         "targets": torch.tensor([item["target"] for item in items], dtype=torch.long),
+        "person_keys": [item["person_key"] for item in items],
+        "image_keys": [item["image_keys"] for item in items],
+    }
+
+
+def collate_unlabeled_patient_bags(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Pad diagnosis-hidden patient bags without manufacturing target labels."""
+
+    if not items:
+        raise ValueError("Cannot collate an empty batch")
+    batch_size = len(items)
+    max_instances = max(item["images"].shape[0] for item in items)
+    channels, height, width = items[0]["images"].shape[1:]
+    images = items[0]["images"].new_zeros(
+        (batch_size, max_instances, channels, height, width)
+    )
+    mask = torch.zeros((batch_size, max_instances), dtype=torch.bool)
+    for index, item in enumerate(items):
+        count = item["images"].shape[0]
+        images[index, :count] = item["images"]
+        mask[index, :count] = True
+    return {
+        "images": images,
+        "instance_mask": mask,
         "person_keys": [item["person_key"] for item in items],
         "image_keys": [item["image_keys"] for item in items],
     }

@@ -12,6 +12,7 @@ from src.research_frozen_inference import (
     hierarchical_probabilities,
     mean_probability_vectors,
     median_roi_box,
+    run_unlabeled_patient_inference,
 )
 
 
@@ -51,6 +52,44 @@ def test_confidence_flag_reports_both_frozen_reasons():
         "top1_top2_margin_below_threshold",
     )
     assert confidence_flag([0.7, 0.2, 0.1]) == (False, ())
+
+
+def test_unlabeled_inference_returns_probabilities_without_targets():
+    import torch
+
+    class FakeModel:
+        def eval(self):
+            return self
+
+        def __call__(self, images, mask, instance_chunk_size=None):
+            assert instance_chunk_size == 2
+            probabilities = torch.tensor([[0.7, 0.2, 0.1]], device=images.device)
+            return {"patient_probabilities": probabilities}
+
+    loader = [
+        {
+            "images": torch.zeros((1, 2, 3, 4, 4)),
+            "instance_mask": torch.tensor([[True, True]]),
+            "person_keys": ["P1"],
+            "image_keys": [["I1", "I2"]],
+        }
+    ]
+    result = run_unlabeled_patient_inference(
+        FakeModel(),
+        loader,
+        device=torch.device("cpu"),
+        expected_columns=3,
+        instance_chunk_size=2,
+    )
+    assert result["person_keys"] == ("P1",)
+    assert result["image_counts"] == (2,)
+    np.testing.assert_allclose(result["probabilities"], [[0.7, 0.2, 0.1]])
+
+    loader[0]["targets"] = torch.tensor([0])
+    with pytest.raises(ValueError, match="must not contain targets"):
+        run_unlabeled_patient_inference(
+            FakeModel(), loader, device=torch.device("cpu"), expected_columns=3
+        )
 
 
 def test_audit_numbered_image_cohort_checks_exact_coverage(tmp_path):

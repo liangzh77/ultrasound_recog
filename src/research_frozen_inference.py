@@ -94,6 +94,56 @@ def confidence_flag(
     return bool(reasons), tuple(reasons)
 
 
+def run_unlabeled_patient_inference(
+    model: object,
+    loader: Iterable[dict[str, object]],
+    *,
+    device: object,
+    expected_columns: int,
+    amp: bool = True,
+    instance_chunk_size: int | None = None,
+) -> dict[str, object]:
+    """Infer diagnosis-hidden patient bags without losses, targets, or metrics."""
+
+    import torch
+
+    model.eval()
+    amp_enabled = bool(amp and getattr(device, "type", None) == "cuda")
+    all_person_keys: list[str] = []
+    all_image_counts: list[int] = []
+    all_probabilities: list[list[float]] = []
+    for batch in loader:
+        if "targets" in batch:
+            raise ValueError("unlabeled inference batches must not contain targets")
+        images = batch["images"].to(device, non_blocking=True)
+        mask = batch["instance_mask"].to(device, non_blocking=True)
+        person_keys = list(batch["person_keys"])
+        if len(person_keys) != images.shape[0]:
+            raise ValueError("patient keys do not match the inference batch")
+        with torch.inference_mode(), torch.autocast(
+            device_type=device.type,
+            dtype=torch.float16,
+            enabled=amp_enabled,
+        ):
+            outputs = model(images, mask, instance_chunk_size=instance_chunk_size)
+        probabilities = outputs["patient_probabilities"].detach().cpu().numpy()
+        if probabilities.shape != (len(person_keys), expected_columns):
+            raise ValueError("model returned an invalid patient probability shape")
+        _probability_matrix(probabilities, expected_columns)
+        all_person_keys.extend(str(key) for key in person_keys)
+        all_image_counts.extend(int(value) for value in mask.sum(dim=1).cpu().tolist())
+        all_probabilities.extend(probabilities.tolist())
+    if not all_person_keys:
+        raise ValueError("unlabeled patient loader is empty")
+    if len(all_person_keys) != len(set(all_person_keys)):
+        raise ValueError("unlabeled inference returned duplicate patient keys")
+    return {
+        "person_keys": tuple(all_person_keys),
+        "image_counts": tuple(all_image_counts),
+        "probabilities": np.asarray(all_probabilities, dtype=np.float64),
+    }
+
+
 def audit_numbered_image_cohort(
     root: Path, *, expected_patients: int, expected_images: int
 ) -> dict[str, int | bool]:
