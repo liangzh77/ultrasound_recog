@@ -134,3 +134,32 @@ def test_r1_case_review_selection_is_preregistered_and_deterministic():
     assert "full_image_fallback" in first["P1"]
     assert "largest_probability_shift" in first["P5"]
     assert sum("stable_top1_random_control" in reasons for reasons in first.values()) == 1
+
+
+def test_r1_review_tile_draws_manual_and_auto_boxes(tmp_path: Path):
+    tool = runpy.run_path(
+        Path(__file__).resolve().parent.parent / "tools/59_render_r1_case_review.py"
+    )
+    image_path = tmp_path / "source.png"
+    Image.new("RGB", (100, 80), color=(0, 0, 0)).save(image_path)
+    row = {
+        "image_key": "IMG_TEST",
+        "r0_status": "detected",
+        "manual_roi_x1": "10",
+        "manual_roi_y1": "10",
+        "manual_roi_x2": "90",
+        "manual_roi_y2": "70",
+        "auto_roi_x1": "20",
+        "auto_roi_y1": "20",
+        "auto_roi_x2": "80",
+        "auto_roi_y2": "60",
+        "reference_iou_descriptive": "0.5",
+    }
+    tile = tool["render_image_tile"](image_path, row)
+    assert tile.size == (
+        tool["TILE_WIDTH"],
+        tool["TILE_HEADER_HEIGHT"] + tool["IMAGE_HEIGHT"],
+    )
+    colors = set(tile.get_flattened_data())
+    assert (0, 255, 0) in colors
+    assert (255, 0, 0) in colors
