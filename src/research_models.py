@@ -12,6 +12,7 @@ def create_timm_encoder(
     model_name: str,
     pretrained: bool,
     pretrained_path: Path | None = None,
+    in_chans: int = 3,
 ) -> tuple[nn.Module, int]:
     import timm
 
@@ -29,6 +30,7 @@ def create_timm_encoder(
         pretrained=pretrained,
         num_classes=0,
         global_pool="avg",
+        in_chans=in_chans,
         **options,
     )
     return encoder, int(encoder.num_features)

@@ -57,6 +57,19 @@ def test_timm_encoder_exposes_pooled_feature_dimension_without_pretraining():
     assert features.shape == (1, feature_dim)
 
 
+def test_timm_encoder_accepts_rgb_plus_binary_mask_channel():
+    encoder, feature_dim = create_timm_encoder(
+        "efficientnet_b2.ra_in1k",
+        pretrained=False,
+        in_chans=4,
+    )
+
+    with torch.inference_mode():
+        features = encoder(torch.zeros((1, 4, 64, 64)))
+
+    assert features.shape == (1, feature_dim)
+
+
 def test_masked_mean_classifier_chunked_inference_matches_single_pass():
     model = MaskedMeanClassifier(
         MeanChannelEncoder(),

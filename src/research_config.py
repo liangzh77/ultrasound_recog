@@ -37,11 +37,19 @@ def load_research_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("Research config must be a mapping")
-    if config.get("experiment_code") not in {"E0", "E1", "E1S", "E2", "E2R", "E3"}:
+    if config.get("experiment_code") not in {
+        "E0",
+        "E1",
+        "E1S",
+        "E2",
+        "E2R",
+        "E3",
+        "L0",
+    }:
         raise ValueError("Unsupported patient image experiment code")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi", "E3": "roi"}[
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi", "E3": "roi", "L0": "roi"}[
         config["experiment_code"]
     ]
     if config["input_mode"] != expected_mode:
@@ -60,6 +68,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E2": "letterbox",
         "E2R": "letterbox",
         "E3": "letterbox",
+        "L0": "letterbox",
     }[config["experiment_code"]]
     if data.get("resize_mode") != expected_resize:
         raise ValueError("Experiment code and resize_mode do not match")
@@ -83,6 +92,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E2": "gated_attention",
         "E2R": "gated_attention",
         "E3": "mean_feature",
+        "L0": "mean_probability",
     }[config["experiment_code"]]
     if aggregation != expected_aggregation:
         raise ValueError("Experiment code and patient aggregation do not match")
@@ -102,6 +112,28 @@ def load_research_config(path: Path) -> dict[str, Any]:
             f"{config['experiment_code']} attention_kl_weight must be "
             f"{expected_kl_weight}"
         )
+    input_channels = int(model.get("input_channels", 3))
+    if config["experiment_code"] == "L0":
+        guidance = config.get("lesion_guidance") or {}
+        if input_channels != 4:
+            raise ValueError("L0 requires RGB plus one binary mask channel")
+        if guidance.get("rgb_region") != "reviewed_ultrasound_rect_complete_image":
+            raise ValueError("L0 must preserve the complete reviewed effective view")
+        if guidance.get("mask_channel") != "binary_union_of_finding_polygons":
+            raise ValueError("L0 requires one binary union mask channel")
+        if guidance.get("preserve_nonfinding_rgb_pixels") is not True:
+            raise ValueError("L0 must retain non-finding RGB context")
+        if guidance.get("category_names_exposed_to_classifier") is not False:
+            raise ValueError("L0 cannot expose finding category names to the model")
+        categories = guidance.get("included_categories") or []
+        if len(categories) != 13 or len(set(categories)) != 13:
+            raise ValueError("L0 requires 13 unique preregistered finding categories")
+        if not data.get("mask_manifest_path") or not data.get(
+            "mask_manifest_sha256"
+        ):
+            raise ValueError("L0 requires a frozen mask manifest and SHA-256")
+    elif input_channels != 3:
+        raise ValueError("Existing patient image experiments require three RGB channels")
     if int(training.get("max_epochs", 0)) > 60:
         raise ValueError("max_epochs cannot exceed 60")
     if int(training.get("pilot_epochs", 0)) > 5:

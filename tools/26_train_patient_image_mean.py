@@ -238,6 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = _load_patient_image_config(config_path)
     is_gate = config["experiment_code"] == "G0"
     is_abnormal = config["experiment_code"] == "D0"
+    is_lesion_guided = config["experiment_code"] == "L0"
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -343,7 +344,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8"
         )
     )
-    if (is_gate or is_abnormal) and source_freeze["dataset_version"] != config["data_fingerprint"]:
+    if (
+        is_gate or is_abnormal or is_lesion_guided
+    ) and source_freeze["dataset_version"] != config["data_fingerprint"]:
         raise ValueError("Task config and frozen dataset fingerprint do not match")
 
     record_sets = {
@@ -355,6 +358,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         for split in ("train", "validation", "test")
     }
+    lesion_mask_records = None
+    lesion_mask_stats = None
+    if is_lesion_guided:
+        from src.research_lesion_guided import load_lesion_mask_manifest
+
+        manifest_relative = Path(config["data"]["mask_manifest_path"])
+        if manifest_relative.is_absolute():
+            raise ValueError("L0 mask manifest path must be project-relative")
+        manifest_path = (ROOT / manifest_relative).resolve()
+        manifest_path.relative_to(ROOT.resolve())
+        all_image_keys = {
+            record.image_key for records in record_sets.values() for record in records
+        }
+        lesion_mask_records = load_lesion_mask_manifest(
+            manifest_path,
+            ROOT,
+            str(config["data"]["mask_manifest_sha256"]),
+            all_image_keys,
+            verify_mask_hashes=True,
+        )
+        lesion_mask_stats = {
+            split: {
+                "images": len(records),
+                "zero_mask_images": sum(
+                    lesion_mask_records[record.image_key].positive_pixels == 0
+                    for record in records
+                ),
+                "finding_objects": sum(
+                    lesion_mask_records[record.image_key].finding_object_count
+                    for record in records
+                ),
+            }
+            for split, records in record_sets.items()
+        }
     if is_gate:
         from src.research_gate import remap_records_to_gate
 
@@ -444,6 +481,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "gate_counts": gate_counts,
             }
         )
+    if is_lesion_guided:
+        run_contract.update(
+            {
+                "input_channels": int(config["model"]["input_channels"]),
+                "lesion_guidance": config["lesion_guidance"],
+                "lesion_mask_stats": lesion_mask_stats,
+                "mask_manifest_path": config["data"]["mask_manifest_path"],
+                "mask_manifest_sha256": config["data"]["mask_manifest_sha256"],
+            }
+        )
     if is_abnormal:
         run_contract.update(
             {
@@ -475,21 +522,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_contract["augmentation_fill_rgb"] = list(letterbox_fill)
     if resize_mode == "letterbox":
         run_contract["letterbox_fill_rgb"] = list(letterbox_fill)
-    image_datasets = {
-        split: ResearchImageDataset(
-            records,
-            input_mode=config["input_mode"],
-            resize_mode=resize_mode,
-            output_size=int(data_config["output_size"]),
-            image_transform=(
-                build_training_augmentation(letterbox_fill)
-                if split == "train"
-                else None
-            ),
-            letterbox_fill=letterbox_fill,
+    if is_lesion_guided:
+        from src.research_lesion_guided import (
+            LesionGuidedResearchImageDataset,
+            PairedLesionAugmentation,
         )
-        for split, records in record_sets.items()
-    }
+
+        image_datasets = {
+            split: LesionGuidedResearchImageDataset(
+                records,
+                {
+                    record.image_key: lesion_mask_records[record.image_key]
+                    for record in records
+                },
+                output_size=int(data_config["output_size"]),
+                pair_transform=(
+                    PairedLesionAugmentation(letterbox_fill)
+                    if split == "train"
+                    else None
+                ),
+                letterbox_fill=letterbox_fill,
+            )
+            for split, records in record_sets.items()
+        }
+    else:
+        image_datasets = {
+            split: ResearchImageDataset(
+                records,
+                input_mode=config["input_mode"],
+                resize_mode=resize_mode,
+                output_size=int(data_config["output_size"]),
+                image_transform=(
+                    build_training_augmentation(letterbox_fill)
+                    if split == "train"
+                    else None
+                ),
+                letterbox_fill=letterbox_fill,
+            )
+            for split, records in record_sets.items()
+        }
     bag_datasets = {
         split: PatientBagDataset(
             images,
@@ -520,6 +591,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config["model"]["name"],
         pretrained=bool(config["model"]["pretrained"]),
         pretrained_path=pretrained_path,
+        in_chans=int(config["model"].get("input_channels", 3)),
     )
     aggregation = config["model"].get("aggregation", "mean_probability")
     if aggregation == "gated_attention":

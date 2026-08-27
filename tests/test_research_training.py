@@ -136,6 +136,19 @@ def test_e3_changes_only_patient_aggregation_from_e1():
     assert comparable_e1 == comparable_e3
 
 
+def test_l0_preserves_full_roi_rgb_and_adds_one_binary_mask_channel():
+    l0 = load_research_config(
+        ROOT / "configs/research/l0_lesion_guided_mean_b2.yaml"
+    )
+
+    assert l0["input_mode"] == "roi"
+    assert l0["model"]["input_channels"] == 4
+    assert l0["model"]["aggregation"] == "mean_probability"
+    assert l0["lesion_guidance"]["preserve_nonfinding_rgb_pixels"] is True
+    assert l0["lesion_guidance"]["preserve_relative_spatial_positions"] is True
+    assert l0["lesion_guidance"]["category_names_exposed_to_classifier"] is False
+
+
 def test_pretrained_weight_path_is_local_and_hash_verified(tmp_path):
     weights = tmp_path / "weights.bin"
     weights.write_bytes(b"known weights")

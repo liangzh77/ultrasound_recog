@@ -1,0 +1,38 @@
+study: l0_manual_lesion_mask_preparation
+status: frozen
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+input_contract:
+  rgb_region: reviewed_ultrasound_rect_complete_image
+  mask_channel: binary_union_of_finding_polygons
+  preserve_nonfinding_rgb_pixels: true
+  preserve_relative_spatial_positions: true
+  category_names_exposed_to_classifier: false
+  output_size: 384
+  resize_mode: letterbox
+  mask_interpolation: nearest
+  mask_background: 0
+  mask_foreground: 1
+included_categories:
+  - 半月板囊肿
+  - 囊肿
+  - 滑膜囊肿
+  - 滑膜血流
+  - 痛风石
+  - 积液
+  - 结晶
+  - 腘窝囊肿
+  - 骨侵蚀
+  - 骨赘
+  - 髌下深囊炎
+  - 髌前血肿
+  - 鹅足腱滑囊炎
+excluded_roles:
+  anatomy: 13
+  ambiguous: 2
+zero_mask_policy: keep_complete_rgb_with_zero_mask
+privacy:
+  allow_raw_paths_in_public_manifest: false
+  allow_source_filenames_in_public_manifest: false
+  allow_diagnosis_in_mask_files: false
+  allow_2026: false
