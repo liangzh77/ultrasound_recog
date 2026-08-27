@@ -1,5 +1,5 @@
 experiment_code: R2
-status: preregistered_waiting_for_R0_R1_route_decision
+status: development_route_frozen_ready_for_one_formal_prediction
 study_id: knee_patient_multimodal_v2_20260827
 approved_on: '2026-08-27'
 cohort:
@@ -11,10 +11,13 @@ cohort:
   patient_identifier: integer_1_to_225
   labels_available_to_pipeline: false
 route:
-  selected: pending_R1_development_only
+  selected: full_auto
+  diagnostic_branch: e1_image_and_c3_hierarchical_without_manual_lesion_contours
   full_auto_condition: R1_auto_roi_classification_effect_is_acceptable_after_case_review
   semi_auto_condition: R1_auto_roi_harms_classification_but_manual_roi_remains_usable
   selection_may_use_2026: false
+  manual_lesion_contours_required: false
+  l0_exclusion_reason: L0_annotation_presence_area_bias_and_L1_fixed_fusion_failure
 auto_roi_ensemble:
   members: R0_fold_0_to_4_formal_best_checkpoints
   member_box: highest_confidence_detection
@@ -22,6 +25,12 @@ auto_roi_ensemble:
   no_member_detection_policy: full_image_fallback_and_flag
   clamp_to_image_bounds: true
   checkpoint_hash_source: R0_formal_training_summaries
+  checkpoints:
+    0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_0_formal/weights/best.pt, sha256: 037fab2e1b2ebff45ac2987965f081ddbae8acb21c6ee9fa9926dc0db7d33fdd}
+    1: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_1_formal/weights/best.pt, sha256: c237667d3b44bd5c33f739644706f777f5d69e704294105edf1c58aa9841930d}
+    2: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_2_formal/weights/best.pt, sha256: e735fa6b9ef07d6febce216e162241b9b6772165b7f304d940e851cd4ed280f5}
+    3: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_3_formal/weights/best.pt, sha256: 3258e2d0d34f102ac7a08a66fbbc6c957b01e0add307ad550fe390f2bc6a96f4}
+    4: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/R0_auto_roi/fold_4_formal/weights/best.pt, sha256: 840b8bbe48228a38871201b9a4c3841f508b733af9edbf215d9ebdf303ec2af7}
 manual_roi_contract:
   required_only_when_route_is_semi_auto: true
   unit: original_image_pixels

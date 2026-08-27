@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T19:30:00+08:00
+updated_at: 2026-08-27T20:10:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,46 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: L1-l0-c3-fixed-abnormal-fusion-formal
+    kind: formal_oof_audit
+    status: completed_gate_failed_route_closed
+    research_question: 在767名异常开发患者中，冻结L0异常条件图像概率能否为冻结C3临床数值模型提供可信互补信息
+    preregistered_gate: 固定75% C3加25% L0、不训练不搜权重；融合减C3 macro-F1至少+0.01、配对CI下界大于0、至少4/5折正向且任类F1下降不超过0.05
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: ceee81fd188d8b147485f48b225af8e826df892e
+    config:
+      path: configs/research/l1_l0_c3_fixed_abnormal_fusion.yaml
+      source: git_blob_at_commit
+      sha256: 22db98bdccbf5830e4ac89f434b4a207d199dd7ef59ad8826186e14c60cd3d37
+    command: python tools/63_evaluate_l1_l0_c3_fixed_fusion.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260827]
+    pretrained_sha256: not_applicable_frozen_oof_probability_arithmetic
+    hardware: Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; GPU not used
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L1_l0_c3_fixed_abnormal_fusion_oof.csv
+      sha256: efb090a9346161b1741c2c037981cee31476d1e1fc8b4406ff1481d4ef6e3e84
+    results:
+      patients: 767
+      l0_conditional_macro_f1: 0.3065787449
+      c3_macro_f1: 0.7185249091
+      fixed_fusion_macro_f1: 0.7078593313
+      fixed_fusion_minus_c3: -0.0106655778
+      paired_delta_ci95: [-0.0245063253, 0.0018346778]
+      probability_delta_gt_zero: 0.051
+      positive_folds: 2
+      fold_deltas: [0.0012381840, -0.0055895828, 0.0005775090, -0.0368744632, -0.0096613191]
+      c3_ece: 0.0475285710
+      fusion_ece: 0.1388392696
+      maximum_class_f1_drop: -0.0457875458
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L1_l0_c3_fixed_abnormal_fusion.json
+      report_sha256: 2d78f5b42bc35b575758696e6d1bc7e4c7bfac4db2a99db969e23b83ab8d0525
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/L1人工病灶图像与C3固定融合敏感性结果_2026-08-27.md
+    failure_or_negative_reason: 融合总体macro-F1低于C3且CI跨0，仅2/5折正向；损伤F1下降0.0458并显著恶化ECE
+    conclusion: 现有L0图像概率未给C3提供可信增量，关闭人工病灶轮廓与L0+C3路线
+    next_step: 按ADR-023冻结R0自动有效视野、E1图像和C3分层公式，对2026执行一次研究预测；不要求医院补ROI或病灶轮廓
+
   - id: L0-lesion-guided-sixclass-formal
     kind: formal_model
     status: completed_overall_gain_but_not_selected_due_bias_and_class_safety

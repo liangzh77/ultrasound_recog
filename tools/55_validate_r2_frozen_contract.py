@@ -62,13 +62,12 @@ def main() -> int:
     )
 
     artifact_hashes = []
-    for group_name, member_key in (
-        ("E1", "image_classifier_ensemble"),
-        ("C3", "clinical_ensemble"),
+    for group_name, member_key, collection_key in (
+        ("R0", "auto_roi_ensemble", "checkpoints"),
+        ("E1", "image_classifier_ensemble", "checkpoints"),
+        ("C3", "clinical_ensemble", "models"),
     ):
-        members = config[member_key][
-            "checkpoints" if group_name == "E1" else "models"
-        ]
+        members = config[member_key][collection_key]
         for fold, member in sorted(members.items(), key=lambda item: int(item[0])):
             path = (ROOT / member["path"]).resolve()
             actual_hash = require_sha256(path, member["sha256"], f"{group_name} fold {fold}")
