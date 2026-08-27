@@ -1,0 +1,28 @@
+study: l0_mask_only_proxy_audit
+status: frozen_method_preregistered_before_l0_classification_results
+preregistration_commit: 3db72c96be08fc245548a5e2afb1cea3c7b32ae1
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+mask_manifest_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L0_manual_lesion_mask_manifest.csv
+mask_manifest_sha256: 2ea64e61b41bc374e71f67fd84374761f658c89db2e2983fadb70e97d326fe01
+mask_pixels: 147456
+features:
+  - positive_mask_image_fraction
+  - mean_mask_area_fraction_all_images
+  - maximum_mask_area_fraction
+model:
+  scaler: StandardScaler
+  classifier: LogisticRegression
+  C: 1.0
+  class_weight: balanced
+  solver: lbfgs
+  max_iter: 2000
+  random_state: 20260827
+evaluation:
+  outer_folds: [0, 1, 2, 3, 4]
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260827
+  tuning: none
+  use_rgb: false
+  use_category_names: false
+  allow_2026: false
+
