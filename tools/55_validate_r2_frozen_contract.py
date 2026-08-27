@@ -29,6 +29,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_e1_preprocessing_summary(
+    summary: dict[str, object], fold: int, expected_fill: list[int]
+) -> None:
+    if int(summary.get("outer_fold", -1)) != fold:
+        raise ValueError("E1 preprocessing summary contains the wrong outer fold")
+    if list(summary.get("letterbox_fill_rgb", [])) != expected_fill:
+        raise ValueError("E1 preprocessing summary fill differs from the R2 contract")
+    if summary.get("git_dirty") is not False:
+        raise ValueError("E1 preprocessing summary was not created from a clean worktree")
+    if summary.get("outer_test_used_for_training_or_early_stopping") is not False:
+        raise ValueError("E1 preprocessing summary violates outer-test isolation")
+
+
 def main() -> int:
     args = parse_args()
     config_path = args.config if args.config.is_absolute() else ROOT / args.config
@@ -63,6 +76,27 @@ def main() -> int:
                 {"group": group_name, "fold": int(fold), "sha256": actual_hash}
             )
 
+    preprocessing_summaries = config["image_classifier_ensemble"].get(
+        "preprocessing_summaries", {}
+    )
+    if {int(fold) for fold in preprocessing_summaries} != set(range(5)):
+        raise ValueError("R2 requires five frozen E1 preprocessing summaries")
+    for fold, member in sorted(
+        preprocessing_summaries.items(), key=lambda item: int(item[0])
+    ):
+        fold_number = int(fold)
+        path = (ROOT / member["path"]).resolve()
+        actual_hash = require_sha256(
+            path, member["sha256"], f"E1 preprocessing fold {fold_number}"
+        )
+        summary_data = json.loads(path.read_text(encoding="utf-8"))
+        validate_e1_preprocessing_summary(
+            summary_data, fold_number, list(member["letterbox_fill_rgb"])
+        )
+        artifact_hashes.append(
+            {"group": "E1_preprocessing", "fold": fold_number, "sha256": actual_hash}
+        )
+
     selected_route = config["route"]["selected"]
     if selected_route not in {"pending_R1_development_only", "full_auto", "semi_auto"}:
         raise ValueError(f"unsupported frozen route: {selected_route}")
@@ -90,4 +124,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

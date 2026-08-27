@@ -31,13 +31,19 @@ image_classifier_ensemble:
   code: E1
   aggregation_within_member: mean_image_probabilities_per_patient
   aggregation_across_members: equal_mean_of_five_patient_probability_vectors
-  input_preprocessing: proportional_letterbox_384_no_margin
+  input_preprocessing: proportional_letterbox_384_no_margin_with_frozen_fold_fill
   checkpoints:
     0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_0/best_formal.pt, sha256: 2531b9928f0f3f6092d9280b68390af336734a03e678a0c612d3bc4801408d07}
     1: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_1/best_formal.pt, sha256: f38dd6a25b9517e91bbb3865373abb465a6a87a5c2cf02cae5d99de43dc3b7e1}
     2: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_2/best_formal.pt, sha256: 065f21415b5b541f324abd1cfb8bf1419f3345a668fd024a7e5c9b72ebd57a98}
     3: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_3/best_formal.pt, sha256: 92b552e839b120ae0067dc8ab9eefd34b0fb004ace8acecc9ff96e11456b2958}
     4: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_4/best_formal.pt, sha256: 77d0b7209452ef80cceed120dbd38b90dd3816fb6e2f00d818d8ac18f3732e0b}
+  preprocessing_summaries:
+    0: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1-fold0-seed20260724-formal_summary.json, sha256: c931a307e921e01724f1ad2d252ffeba4814ac02193f1463b7e764f84c5395ff, letterbox_fill_rgb: [0, 0, 0]}
+    1: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1-fold1-seed20260725-formal_summary.json, sha256: 9a619dbb4e3fbbe6a688cf07b76259f220670bbdf989c4b6ea82eb263f7a1ca1, letterbox_fill_rgb: [0, 0, 0]}
+    2: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1-fold2-seed20260726-formal_summary.json, sha256: d2ff127246fd6153a1ef5dd9ef141b9a3b2a08cef3d6169a0a34e8a928ebe72c, letterbox_fill_rgb: [0, 0, 0]}
+    3: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1-fold3-seed20260727-formal_summary.json, sha256: e2d570691d5e01a9b49b7b7f1d8719854dbd6b2f5ba4416504daa5ac6d7b714d, letterbox_fill_rgb: [0, 0, 0]}
+    4: {path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/E1-fold4-seed20260728-formal_summary.json, sha256: 84eb6faabeea223080f98196b151bfe3ae928b249df0a3cae8dd1ab16ccb046c, letterbox_fill_rgb: [0, 0, 0]}
 clinical_ensemble:
   code: C3
   features: [sex, age_years, esr_mm_h, crp_mg_l, anti_ccp_u_ml, rf_iu_ml, hla_b27, uric_acid]
@@ -66,4 +72,3 @@ controls:
   prohibit_using_2026_reference_diagnosis_before_prediction_freeze: true
   generate_formal_prediction_once: true
   prediction_manifest_must_include_all_artifact_hashes: true
-

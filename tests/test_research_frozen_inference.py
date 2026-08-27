@@ -151,3 +151,19 @@ def test_2026_c3_component_requires_exact_image_clinical_patient_join():
     row["person_key"] = "CLINICAL_KEY"
     with pytest.raises(ValueError, match="clinical and image patient keys differ"):
         tool["_validate_feature_rows"]([row], features, {"IMAGE_KEY"})
+
+
+def test_r2_preflight_validates_frozen_e1_preprocessing_metadata():
+    tool = runpy.run_path(
+        Path(__file__).resolve().parent.parent / "tools/55_validate_r2_frozen_contract.py"
+    )
+    summary = {
+        "outer_fold": 2,
+        "letterbox_fill_rgb": [0, 0, 0],
+        "git_dirty": False,
+        "outer_test_used_for_training_or_early_stopping": False,
+    }
+    tool["validate_e1_preprocessing_summary"](summary, 2, [0, 0, 0])
+    summary["letterbox_fill_rgb"] = [1, 2, 3]
+    with pytest.raises(ValueError, match="fill differs"):
+        tool["validate_e1_preprocessing_summary"](summary, 2, [0, 0, 0])
