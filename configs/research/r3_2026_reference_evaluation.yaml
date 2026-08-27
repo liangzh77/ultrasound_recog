@@ -1,0 +1,71 @@
+experiment_code: R3-2026-external-evaluation
+status: preregistered_waiting_for_hospital_reference
+study_id: knee_patient_multimodal_v2_20260827
+prediction:
+  manifest_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/r2_2026/2026_formal_prediction_manifest.json
+  manifest_sha256: 4c29f1665a5510206ee90afa7611d9dc89a373f81bfd991cb895f79f3f43c43f
+  hospital_delivery_path: workspace/data/registry/exp_2026-07_patient_multimodal_v1/private/r2_2026/2026_hospital_prediction_delivery.csv
+  hospital_delivery_sha256: 4454eeaccb73ede923a2e7bdb96e96fbb15cf4a025694a5956ed63264be6dfbb
+  frozen_prediction_commit: 343913d9d2adc26b8a2954aeee827f1ce7e3d5e9
+reference_contract:
+  sheet_name: 参考诊断回表
+  patients: 225
+  patient_number_min: 1
+  patient_number_max: 225
+  columns:
+    patient_number: 患者编号
+    status: 参考状态
+    diagnosis: 参考诊断
+    diagnosis_basis: 诊断形成方式
+    ai_visible: 复核时是否已见AI结果
+    reviewer_role: 复核者角色
+    review_date: 复核日期
+    note: 备注（不得填写姓名等身份信息）
+  evaluable_status: 可评价
+  allowed_statuses: [可评价, 诊断有争议, 信息不足]
+  allowed_diagnoses: [正常, 类风湿性关节炎, 痛风性关节炎, 脊柱关节炎, 骨性关节炎, 损伤]
+  allowed_diagnosis_bases:
+    - AI结果形成前既有诊断
+    - 未见AI结果的独立复核
+    - 已见AI结果后的复核
+    - 其他（备注说明）
+  allowed_ai_visibility: [否, 是]
+  allowed_reviewer_roles: [超声科医师, 风湿免疫科医师, 骨科医师, 其他医师]
+  maximum_note_characters: 200
+  consistency:
+    ai_invisible_bases: [AI结果形成前既有诊断, 未见AI结果的独立复核]
+    ai_visible_basis: 已见AI结果后的复核
+evaluation:
+  class_order: [正常, 类风湿性关节炎, 痛风性关节炎, 脊柱关节炎, 骨性关节炎, 损伤]
+  probability_slugs: [normal, ra, ga, spa, oa, injury]
+  model_modes: [image, hierarchical]
+  primary_population: all_evaluable_reference_rows
+  independent_subgroup: evaluable_and_ai_not_visible
+  ai_visible_subgroup: evaluable_and_ai_visible
+  bootstrap_samples: 5000
+  bootstrap_seed: 20260827
+  calibration_bins: 10
+  metrics:
+    - macro_f1_with_stratified_patient_bootstrap_95_ci
+    - accuracy
+    - balanced_accuracy
+    - top2_accuracy
+    - per_class_support_sensitivity_specificity_precision_f1_auc
+    - confusion_matrix
+    - multiclass_brier
+    - expected_calibration_error
+    - low_and_high_confidence_subgroups
+    - paired_macro_f1_difference_hierarchical_minus_image
+  missing_class_policy: retain_all_six_classes_and_report_zero_support
+  model_selection_from_2026_prohibited: true
+outputs:
+  public_report_json: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/r3_2026/2026_external_evaluation.json
+  public_report_markdown: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/r3_2026/2026_external_evaluation.md
+  private_joined_csv: workspace/data/registry/exp_2026-07_patient_multimodal_v1/private/r3_2026/2026_reference_predictions_joined_private.csv
+controls:
+  require_clean_git_for_formal_evaluation: true
+  refuse_overwrite: true
+  preserve_both_model_modes: true
+  do_not_choose_model_from_2026: true
+  public_outputs_must_be_aggregate_only: true
+  clinical_use_authorized: false
