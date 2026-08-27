@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-03T23:12:00+08:00
+updated_at: 2026-08-27T16:55:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,50 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: L0-fold0-resource-pilot
+    kind: resource_pilot
+    status: completed_all_resource_and_isolation_gates_passed
+    research_question: 完整有效视野RGB加人工病灶二值掩膜第四通道的患者多图六分类能否在本机资源限制内稳定运行
+    preregistered_gate: fold0五epoch小于1小时、峰值保留显存不超过9GB、无NaN或资源停止、RGB与mask工程合同通过、outer test不迭代；pilot分数不用于模型选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 3db72c96be08fc245548a5e2afb1cea3c7b32ae1
+    config:
+      path: configs/research/l0_lesion_guided_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 9817eeef73896c61e2648e406d6739f4f0ad76055b00f8b9435fa81033df9109
+    command: python tools/26_train_patient_image_mean.py --config configs/research/l0_lesion_guided_mean_b2.yaml --fold 0 --pilot --pilot-epochs 5
+    folds: [0]
+    seeds: [20260827]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two DataLoader workers
+    runtime: 0.0802736111 hours
+    oof: not_applicable_resource_pilot_outer_test_not_iterated
+    results:
+      patients: 967
+      images: 4543
+      fold_0_train_patients: 618
+      fold_0_validation_patients: 155
+      epochs_completed: 5
+      best_validation_macro_f1_descriptive_only: 0.3156314700
+      best_epoch_descriptive_only: 4
+      peak_gpu_memory_allocated_gb: 1.2541780472
+      peak_gpu_memory_reserved_gb: 1.353515625
+      outer_test_iterated: false
+      mask_manifest_sha256: 2ea64e61b41bc374e71f67fd84374761f658c89db2e2983fadb70e97d326fe01
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/L0-fold0-seed20260827-pilot_summary.json
+      summary_sha256: dba4a1f8a5268df75ed196568b71d379dccf4fa9c84fd39129c0a49f0b6a40cd
+      history_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/logs/L0/fold_0_pilot_history.json
+      history_sha256: 16be3068d629561fdbc21346bd2c60cfc3c83f955df7e37c9b5fd8f7780d0cb4
+      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_0/best_pilot.pt
+      pilot_checkpoint_sha256: 42181408ba5904256887412bbc73bccaa0bc28b43000fc9cd9eee2b2694c6d9e
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [8a2f0abe5269440b81ab04e1a6f0dedf]
+    mlflow_fold_run_ids: [b0a585ec319f4c5cb780c48c4fd53bf1]
+    markdown_report: docs/project/L0人工病灶掩膜引导六分类资源pilot结果_2026-08-27.md
+    failure_or_negative_reason: none_all_preregistered_resource_and_isolation_gates_passed
+    conclusion: L0四通道预训练、同步增强、患者bag、资源与外层隔离全部通过；pilot分数不作研究结论
+    next_step: 先完成R1自动ROI分类影响比较；之后从洁净Git独立启动L0正式五折，不复用pilot权重
+
   - id: S1-annotation-supervision-audit-formal
     kind: formal_bias_audit
     status: completed_direct_28class_route_failed
