@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from src.research_dataset import ResearchImageRecord, replace_record_rois
 from src.research_auto_roi import (
     ROIBox,
     descriptive_distribution,
@@ -63,3 +64,22 @@ def test_descriptive_distribution_keeps_continuous_geometry_without_gate():
     assert summary["median"] == 0.5
     assert "passed" not in summary
     assert descriptive_distribution([])["median"] is None
+
+
+def test_replace_record_rois_supports_detected_and_full_image_fallback(tmp_path: Path):
+    image_path = tmp_path / "image.jpg"
+    Image.new("RGB", (100, 80)).save(image_path)
+    records = [
+        ResearchImageRecord("A", "P1", "正常", 0, image_path, {"x1": 1, "y1": 1, "x2": 2, "y2": 2}),
+        ResearchImageRecord("B", "P1", "正常", 0, image_path, {"x1": 1, "y1": 1, "x2": 2, "y2": 2}),
+    ]
+    updated, fallback = replace_record_rois(
+        records,
+        {
+            "A": {"x1": 10, "y1": 8, "x2": 90, "y2": 72},
+            "B": None,
+        },
+    )
+    assert updated[0].roi == {"x1": 10.0, "y1": 8.0, "x2": 90.0, "y2": 72.0}
+    assert updated[1].roi == {"x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 80.0}
+    assert fallback == ("B",)

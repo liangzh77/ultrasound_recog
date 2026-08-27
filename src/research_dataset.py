@@ -6,7 +6,7 @@ import csv
 import multiprocessing
 import random
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -93,6 +93,38 @@ def load_fold_records(
     if len({record.image_key for record in records}) != len(records):
         raise ValueError("Duplicate image_key in selected records")
     return records
+
+
+def replace_record_rois(
+    records: list[ResearchImageRecord],
+    overrides: dict[str, dict[str, float] | None],
+) -> tuple[list[ResearchImageRecord], tuple[str, ...]]:
+    """Replace every record ROI; None deterministically falls back to the full image."""
+    record_keys = {record.image_key for record in records}
+    if set(overrides) != record_keys:
+        missing = sorted(record_keys - set(overrides))
+        extra = sorted(set(overrides) - record_keys)
+        raise ValueError(
+            f"ROI overrides must exactly match records; missing={missing[:3]}, extra={extra[:3]}"
+        )
+    updated = []
+    fallback_keys = []
+    for record in records:
+        override = overrides[record.image_key]
+        with Image.open(record.image_path) as image:
+            width, height = image.size
+        if override is None:
+            roi = {"x1": 0.0, "y1": 0.0, "x2": float(width), "y2": float(height)}
+            fallback_keys.append(record.image_key)
+        else:
+            roi = {name: float(override[name]) for name in ("x1", "y1", "x2", "y2")}
+            if not (
+                0 <= roi["x1"] < roi["x2"] <= width
+                and 0 <= roi["y1"] < roi["y2"] <= height
+            ):
+                raise ValueError(f"Invalid automatic ROI for {record.image_key}")
+        updated.append(replace(record, roi=roi))
+    return updated, tuple(fallback_keys)
 
 
 class ResearchImageDataset(Dataset):
