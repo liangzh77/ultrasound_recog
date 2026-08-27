@@ -1,0 +1,46 @@
+experiment_code: R0
+status: approved_for_implementation
+study_id: knee_patient_multimodal_v2_20260827
+approved_on: '2026-08-27'
+research_question: 自动超声有效视野ROI相对人工ROI如何影响患者级分类结果
+seed: 20260827
+data:
+  expected_patients: 967
+  expected_images: 4543
+  registry_dir: workspace/data/registry/exp_2026-07_patient_multimodal_v1
+  images_csv: images.csv
+  source_map_csv: private/image_sources.csv
+  inner_folds_csv: folds_inner.csv
+  output_dir: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/datasets/R0_auto_roi
+task:
+  type: single_class_object_detection
+  class_names: [ultrasound_view]
+  reference_box: ultrasound_rect
+  reference_interpretation: noisy_reasonable_rectangle_not_unique_truth
+model:
+  family: ultralytics_detection
+  initial_weights: assets/pretrained/yolo26n.pt
+  image_size: 640
+  batch_size: 8
+  pilot_epochs: 5
+  formal_epochs: 50
+  patience: 10
+runtime:
+  device: 0
+  workers: 0
+  max_cpu_threads: 2
+  max_interop_threads: 1
+  amp: true
+  cache_images: false
+evaluation:
+  outer_folds: [0, 1, 2, 3, 4]
+  geometry_metrics_are_descriptive: true
+  hard_geometry_gate: false
+  primary_decision_basis: downstream_patient_classification
+  compare_inputs: [full_image, oof_auto_roi, reviewed_manual_roi]
+privacy:
+  public_artifacts_use_image_key_only: true
+  allow_raw_paths_in_public_outputs: false
+  allow_source_filenames_in_public_outputs: false
+  allow_2026_labels: false
+
