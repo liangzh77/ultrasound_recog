@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T17:15:00+08:00
+updated_at: 2026-08-27T19:30:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,115 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: L0-lesion-guided-sixclass-formal
+    kind: formal_model
+    status: completed_overall_gain_but_not_selected_due_bias_and_class_safety
+    research_question: 保留完整有效视野RGB、同图多病灶相对位置和非病灶背景时，人工病灶二值掩膜第四通道能否改善患者多图六分类
+    preregistered_gate: 不设机械单门；综合L0减E1配对macro-F1区间、至少4/5折方向、逐类损伤、零掩膜分层、mask-only代理、病例解释和医院工作量决定是否推荐半自动轮廓流程
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 336bfa6d929f519e077467312e7f4b4e61fb9a59
+    config:
+      path: configs/research/l0_lesion_guided_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 9817eeef73896c61e2648e406d6739f4f0ad76055b00f8b9435fa81033df9109
+    command: python tools/61_run_l0_formal_folds.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260827, 20260828, 20260829, 20260830, 20260831]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two DataLoader workers
+    runtime_hours_by_fold: [0.3201825000, 0.1795138889, 0.2036152778, 0.3139886111, 0.2278383333]
+    peak_allocated_gpu_gb_by_fold: [1.2541780472, 1.2511644363, 1.2563447952, 1.2509565353, 1.2562065125]
+    peak_reserved_gpu_gb_by_fold: [1.353515625, 1.392578125, 1.33984375, 1.400390625, 1.33984375]
+    fold_status: [EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED, EARLY_STOPPED]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_oof.csv
+      sha256: 99b5d108d65537aba0bdb2c64f2e3b7bd35c70cd43db7c2e90de8983d431c302
+    additional_fold_oof:
+      - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_fold0.csv, sha256: f5df970044900fe1bf7a544690fd6dc8c913c9ebc32af2b3cd4cbf676f1dff39}
+      - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_fold1.csv, sha256: 7e7a39661490ca152d63615d6abc81d3f94d5f5a28e04317bbd31bf2f75a3803}
+      - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_fold2.csv, sha256: 3d49b41d1fb7a0332a2bf77e9b6953279a913a4e5e53ec24b8084a5f91012079}
+      - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_fold3.csv, sha256: feab2fbbfc9ff737451e327e935695109075e04280c2e391ff8156a97269c504}
+      - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_fold4.csv, sha256: 988236b28c98d8925c6c737cfb6fa480786f0faf575ae5dbca0500f9c88c5f0e}
+    results:
+      patients: 967
+      images: 4543
+      input_channels: 4
+      complete_rgb_context_preserved: true
+      lesion_relative_positions_preserved: true
+      per_lesion_cropping_used: false
+      l0_macro_f1: 0.2743454616
+      l0_macro_f1_ci95: [0.2455194669, 0.3035961223]
+      e1_macro_f1: 0.2155169150
+      paired_delta_l0_minus_e1: 0.0588285466
+      paired_delta_ci95: [0.0221449774, 0.0955408425]
+      positive_folds: 4
+      fold_macro_f1: [0.2537250587, 0.2113492572, 0.2713689654, 0.2086205117, 0.3138268639]
+      accuracy: 0.3112719752
+      top2_accuracy: 0.5594622544
+      ece: 0.0568501114
+      normal_f1: 0.2304526749
+      normal_sensitivity: 0.1400000000
+      injury_f1: 0.0941176471
+      injury_sensitivity: 0.1126760563
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_oof_evaluation.json
+      evaluation_sha256: 78fbeb1795c2def938e3846f6ebd7798a7970ea1e0dee8e50b0d6e34430001c3
+      model_artifacts:
+        - {fold: 0, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_0/best_formal.pt, sha256: 32d05c44cfff14b16a2c099f45ff09b3b34f86b4b7df1858ca53f8f627f64ed4}
+        - {fold: 1, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_1/best_formal.pt, sha256: 3e86021603018ae616187adcb0c7576906783395222b65a623ea839e5483dd26}
+        - {fold: 2, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_2/best_formal.pt, sha256: 42d51e714f9ca33708b0af16e0cd527afdd10a1cb6c9444778f690630ed705e5}
+        - {fold: 3, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_3/best_formal.pt, sha256: 85acdbd539234f826611c4d6499773e62e4175295a975c6a2e513c755c4db02b}
+        - {fold: 4, path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/L0/fold_4/best_formal.pt, sha256: f92971a1bbf2147cd07913c8dc64eae6afe20eb423d7e0c1b8c5eebaf1642ec4}
+    mlflow_parent_run_ids: [ea42c0c2db3343b0806cf2d42605242e, fdbecfa32e8b4dfdaded3b0c4012c4d4, 0d7e7a9e975d41caaa763e6cac6407a8, 026003514b1848d99de666abdd4525e0, aaa76ff50d0d45588a78dcb8498ca455]
+    mlflow_fold_run_ids: [0c49473740a140a2a73b6b76c40202ef, 67888dc7324b440b9cd01b42a96deecc, 0e3e892f105e44fab2d0f4c11f08e9c2, 1199e9e7ae6e4032aaca68b1d72c8846, c3aaeda836f749a69b39fe3a969674c8]
+    markdown_report: docs/project/L0人工病灶掩膜引导患者多图六分类五折结果_2026-08-27.md
+    failure_or_negative_reason: 总体配对增益CI通过且4/5折正向，但正常F1与灵敏度下降、损伤F1仍仅0.094；mask-only三特征代理macro-F1达0.330并超过完整L0，提示主要标注流程偏倚
+    conclusion: 证明完整RGB加病灶mask的同源开发集总体增益，但不能归因为纯病灶形态，也不足以冻结医院人工轮廓流程
+    next_step: 仅允许一个固定75% C3加25% L0异常条件概率的无训练敏感性分析；禁止权重搜索和2026路线选择
+
+  - id: L0-mask-only-proxy-formal
+    kind: formal_bias_audit
+    status: completed_strong_annotation_presence_area_proxy
+    research_question: 不读取任何RGB或类别名称时，轮廓存在比例与面积三个特征能在多大程度上区分六类诊断
+    preregistered_gate: 结果只量化偏倚，不参与L0候选或调参；若代理表现较强，L0增益不得归因为纯病灶形态，必须结合零掩膜分层和逐类安全解释
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: f18f10bba3889e4c4609c4857ec096e552f2b60c
+    config:
+      path: configs/research/l0_mask_only_proxy_audit.yaml
+      source: committed_transcription_of_method_preregistered_at_3db72c9
+      sha256: 73a147b549ea6e657dc1286dc19fc6bebcbb6d82adb22642f4ed3e26577a3525
+    command: python tools/62_audit_l0_mask_only_proxy.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260827]
+    pretrained_sha256: not_applicable_three_feature_balanced_logistic_regression
+    hardware: Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; GPU not used
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L0_mask_only_proxy_oof.csv
+      sha256: ef16683a7b10d2d941b374d2b8915816773bc2778f826df0d848300ecf89a893
+    results:
+      patients: 967
+      features: [positive_mask_image_fraction, mean_mask_area_fraction_all_images, maximum_mask_area_fraction]
+      rgb_used: false
+      category_names_used: false
+      tuning_performed: false
+      proxy_macro_f1: 0.3302068551
+      proxy_macro_f1_ci95: [0.3015512247, 0.3600676135]
+      proxy_accuracy: 0.3919338159
+      proxy_top2_accuracy: 0.6494312306
+      proxy_ece: 0.0533459814
+      all_zero_mask_patients: 266
+      all_zero_l0_minus_e1: 0.0433702285
+      all_zero_delta_ci95: [-0.0083175811, 0.0910839443]
+      any_positive_mask_patients: 701
+      any_positive_l0_minus_e1: 0.0638870248
+      any_positive_delta_ci95: [0.0153839309, 0.1112190588]
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L0_mask_only_proxy_audit.json
+      report_sha256: cdd13543917f4a188d3e8acf9be571165fc5c2d7eae64031ca787024c3817e47
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/L0人工病灶掩膜引导患者多图六分类五折结果_2026-08-27.md
+    failure_or_negative_reason: 仅三个轮廓存在性与面积特征的macro-F1高于完整RGB加mask模型，证明标注选择模式是强疾病代理
+    conclusion: L0总体增益不能直接解释为模型利用了真实病灶形态、病灶间位置或非病灶背景
+    next_step: 不推荐医院立即增加人工画轮廓工作量；仅继续预先允许的一次固定C3融合敏感性分析
+
   - id: R1-auto-roi-classification-sensitivity-formal
     kind: formal_oof_audit
     status: completed_auto_effective_view_selected_diagnosis_still_insufficient

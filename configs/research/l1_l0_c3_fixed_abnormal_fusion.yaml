@@ -1,0 +1,57 @@
+study_code: L1
+status: frozen_after_l0_before_l1_results
+seed: 20260827
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+research_question: >-
+  Among the 767 development patients whose reference diagnosis is abnormal,
+  does the frozen L0 conditional image probability add credible complementary
+  information to the frozen C3 clinical numeric baseline?
+classes: [ra, ga, spa, oa, injury]
+inputs:
+  image_oof:
+    model_id: L0
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/L0_oof.csv
+    sha256: 99b5d108d65537aba0bdb2c64f2e3b7bd35c70cd43db7c2e90de8983d431c302
+    probability_columns: [prob_ra, prob_ga, prob_spa, prob_oa, prob_injury]
+    excluded_probability_column: prob_normal
+  clinical_oof:
+    model_id: C3
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C3_oof.csv
+    sha256: 9bcdedef62b6179a8de0b5118d13a367184cbdc0f0b75a7f23d1bd4a14eb5d8c
+    probability_columns: [prob_ra, prob_ga, prob_spa, prob_oa, prob_injury]
+cohort_contract:
+  expected_patients: 767
+  expected_outer_folds: [0, 1, 2, 3, 4]
+  exclude_reference_class: normal
+  require_exact_person_fold_reference_match: true
+probability_contract:
+  tolerance: 1.0e-6
+  conditional_image_normalization: renormalize_five_abnormal_probabilities
+  minimum_denominator: 1.0e-12
+fixed_fusion:
+  method: arithmetic_probability_blend
+  clinical_weight: 0.75
+  image_weight: 0.25
+  weight_source: reuse_x0_preregistered_weights_without_l0_result_search
+  search_weights: false
+evaluation:
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260827
+  report_per_class: true
+  report_per_fold: true
+decision_gate:
+  minimum_macro_f1_delta_vs_c3: 0.01
+  require_paired_ci_lower_above_zero: true
+  minimum_positive_folds: 4
+  maximum_per_class_f1_drop: 0.05
+interpretation_contract:
+  sensitivity_analysis_only: true
+  no_new_model_is_trained: true
+  cannot_remove_l0_annotation_bias_conclusion: true
+  cannot_alone_recommend_hospital_manual_contours: true
+  cannot_unlock_2026_inference: true
+  allow_2026: false
+outputs:
+  result_json: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L1_l0_c3_fixed_abnormal_fusion.json
+  patient_oof_csv: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/lesion_guided/L1_l0_c3_fixed_abnormal_fusion_oof.csv
+
