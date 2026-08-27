@@ -51,6 +51,15 @@ evaluation:
   geometry_is_descriptive_only: true
   hard_pass_gate: false
   decision_basis: effect_size_confidence_interval_per_class_impact_and_case_review
+case_review:
+  include_all_manual_correct_auto_wrong: true
+  include_all_full_image_fallback: true
+  top_probability_shift_patients: 20
+  lowest_mean_iou_patients_descriptive: 20
+  stable_top1_random_patients: 20
+  random_seed: 20260827
+  deduplicate_patients: true
+  geometry_remains_non_gating: true
 controls:
   prohibit_classifier_retraining_before_sensitivity_result: true
   prohibit_checkpoint_search: true

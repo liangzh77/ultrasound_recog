@@ -1,3 +1,4 @@
+import runpy
 from pathlib import Path
 
 from PIL import Image
@@ -98,3 +99,38 @@ def test_replace_record_rois_supports_detected_and_full_image_fallback(tmp_path:
     assert updated[0].roi == {"x1": 10.0, "y1": 8.0, "x2": 90.0, "y2": 72.0}
     assert updated[1].roi == {"x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 80.0}
     assert fallback == ("B",)
+
+
+def test_r1_case_review_selection_is_preregistered_and_deterministic():
+    tool = runpy.run_path(
+        Path(__file__).resolve().parent.parent
+        / "tools/54_evaluate_r1_auto_roi_classification.py"
+    )
+    rows = [
+        {
+            "person_key": f"P{index}",
+            "manual_roi_correct": int(index == 0),
+            "auto_roi_correct": 0,
+            "full_image_fallback_count": int(index == 1),
+            "probability_l1": float(index),
+            "mean_reference_iou_descriptive": 0.1 * index,
+            "top1_changed": int(index < 2),
+        }
+        for index in range(6)
+    ]
+    config = {
+        "include_all_manual_correct_auto_wrong": True,
+        "include_all_full_image_fallback": True,
+        "top_probability_shift_patients": 1,
+        "lowest_mean_iou_patients_descriptive": 1,
+        "stable_top1_random_patients": 1,
+        "random_seed": 7,
+    }
+    first = tool["select_case_review_patients"](rows, config)
+    repeat = tool["select_case_review_patients"](rows, config)
+    assert first == repeat
+    assert "manual_correct_auto_wrong" in first["P0"]
+    assert "lowest_mean_iou_descriptive" in first["P0"]
+    assert "full_image_fallback" in first["P1"]
+    assert "largest_probability_shift" in first["P5"]
+    assert sum("stable_top1_random_control" in reasons for reasons in first.values()) == 1
