@@ -12,9 +12,11 @@ from src.research_clinical import (
     evaluate_clinical_oof,
     load_clinical_config,
     parse_hla_b27,
+    parse_clinical_model_features,
     parse_numeric_value,
     parse_sex,
     validate_source_headers,
+    validate_blind_source_headers,
     validate_clinical_oof,
 )
 
@@ -84,6 +86,45 @@ def test_source_header_contract_rejects_shifted_laboratory_columns():
     invalid[6], invalid[7] = invalid[7], invalid[6]
     with pytest.raises(ValueError, match="column 6"):
         validate_source_headers(invalid)
+
+
+def test_blind_header_and_feature_parser_exclude_duration_and_identity():
+    headers = [
+        "编号",
+        "性别",
+        "年龄",
+        "病程",
+        "血沉(mm/h)",
+        "CRP(mg/L)",
+        "ACCP（U/mL）",
+        "RF(IU/mL）",
+        "HLAB27",
+        "尿酸",
+    ]
+    validate_blind_source_headers(headers)
+    config = load_clinical_config(CONFIG)
+    parsed, audit = parse_clinical_model_features(
+        {
+            "sex": "女",
+            "age_years": "36岁",
+            "esr_mm_h": "<5",
+            "crp_mg_l": "/",
+            "anti_ccp_u_ml": 10,
+            "rf_iu_ml": "阴性",
+            "hla_b27": "阳性",
+            "uric_acid": 300,
+        },
+        config,
+    )
+    assert parsed["sex"] == 0.0
+    assert parsed["age_years"] == 36.0
+    assert parsed["esr_mm_h"] == 5.0
+    assert parsed["esr_mm_h_censor"] == -1
+    assert parsed["crp_mg_l"] == ""
+    assert parsed["hla_b27"] == 1.0
+    assert audit["missing_features"] == ("crp_mg_l", "rf_iu_ml")
+    assert audit["invalid_features"] == ("rf_iu_ml",)
+    assert "disease_duration" not in parsed
 
 
 def test_preprocessing_fits_training_data_and_returns_all_classes():

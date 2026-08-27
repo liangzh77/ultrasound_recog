@@ -116,6 +116,29 @@ EXPECTED_HEADER_FRAGMENTS = (
     ("hlab27", "hla-b27"),
     ("尿酸",),
 )
+BLIND_EXPECTED_HEADER_FRAGMENTS = (
+    ("编号",),
+    ("性别",),
+    ("年龄",),
+    ("病程",),
+    ("血沉",),
+    ("crp",),
+    ("accp", "抗ccp", "抗-ccp"),
+    ("rf",),
+    ("hlab27", "hla-b27"),
+    ("尿酸",),
+)
+BLIND_SOURCE_COLUMN_INDEX = {
+    "patient_number": 0,
+    "sex": 1,
+    "age_years": 2,
+    "esr_mm_h": 4,
+    "crp_mg_l": 5,
+    "anti_ccp_u_ml": 6,
+    "rf_iu_ml": 7,
+    "hla_b27": 8,
+    "uric_acid": 9,
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -210,6 +233,70 @@ def validate_source_headers(headers: Sequence[str]) -> None:
         )
         if not any(fragment in normalized for fragment in normalized_allowed):
             raise ValueError(f"Clinical source column {index} does not match its frozen role")
+
+
+def validate_blind_source_headers(headers: Sequence[str]) -> None:
+    """Validate the label-hidden 2026 workbook's shorter, diagnosis-free schema."""
+
+    if len(headers) != len(BLIND_EXPECTED_HEADER_FRAGMENTS):
+        raise ValueError("Blind clinical workbook must contain exactly 10 columns")
+    for index, (header, allowed) in enumerate(
+        zip(headers, BLIND_EXPECTED_HEADER_FRAGMENTS)
+    ):
+        normalized = re.sub(r"[\s_（）()／/]", "", str(header)).casefold()
+        normalized_allowed = tuple(
+            re.sub(r"[\s_（）()／/]", "", value).casefold() for value in allowed
+        )
+        if not any(fragment in normalized for fragment in normalized_allowed):
+            raise ValueError(
+                f"Blind clinical source column {index} does not match its frozen role"
+            )
+
+
+def parse_clinical_model_features(
+    source: Mapping[str, Any], config: Mapping[str, Any]
+) -> tuple[dict[str, Any], dict[str, tuple[str, ...]]]:
+    """Parse only the frozen C3 feature roles and return privacy-safe audit flags."""
+
+    missing_tokens = tuple(
+        str(value) for value in config["feature_contract"]["accepted_missing_tokens"]
+    )
+    result: dict[str, Any] = {"sex": parse_sex(source["sex"])}
+    age, _, invalid_age = parse_numeric_value(source["age_years"], missing_tokens)
+    if invalid_age is not None or age is None or not 0 < age <= 120:
+        raise ValueError("Age must be numeric and within the frozen plausibility range")
+    result["age_years"] = age
+
+    missing_features = []
+    censored_features = []
+    invalid_features = []
+    for feature in LAB_FEATURES:
+        raw_value = source[feature]
+        if feature == "hla_b27":
+            parsed, invalid = parse_hla_b27(raw_value, missing_tokens)
+            censor = 0
+        else:
+            parsed, censor, invalid = parse_numeric_value(raw_value, missing_tokens)
+            if parsed is not None and parsed < 0:
+                invalid = str(raw_value).strip()
+                parsed = None
+                censor = 0
+        if invalid is not None:
+            invalid_features.append(feature)
+        missing = int(parsed is None)
+        if missing:
+            missing_features.append(feature)
+        if censor != 0:
+            censored_features.append(feature)
+        result[feature] = "" if parsed is None else parsed
+        result[f"{feature}_missing"] = missing
+        if feature != "hla_b27":
+            result[f"{feature}_censor"] = censor
+    return result, {
+        "missing_features": tuple(missing_features),
+        "censored_features": tuple(censored_features),
+        "invalid_features": tuple(invalid_features),
+    }
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
