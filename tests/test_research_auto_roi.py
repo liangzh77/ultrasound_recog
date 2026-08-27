@@ -7,6 +7,7 @@ from src.research_auto_roi import (
     ROIBox,
     descriptive_distribution,
     materialize_yolo_dataset,
+    require_sha256,
     sha256_file,
 )
 
@@ -55,6 +56,20 @@ def test_sha256_file_is_stable(tmp_path: Path):
     artifact = tmp_path / "artifact.bin"
     artifact.write_bytes(b"automatic-roi")
     assert sha256_file(artifact) == "8d0d38c12984170166adcc404cc4946eb886080c893df064303ef7721cfaf915"
+
+
+def test_require_sha256_rejects_changed_frozen_artifact(tmp_path: Path):
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"frozen")
+    expected = sha256_file(artifact)
+    assert require_sha256(artifact, expected.upper(), "test artifact") == expected
+    artifact.write_bytes(b"changed")
+    try:
+        require_sha256(artifact, expected, "test artifact")
+    except RuntimeError as error:
+        assert "hash mismatch" in str(error)
+    else:
+        raise AssertionError("Changed frozen artifact was accepted")
 
 
 def test_descriptive_distribution_keeps_continuous_geometry_without_gate():

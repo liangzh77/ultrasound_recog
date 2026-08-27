@@ -11,6 +11,7 @@ base_experiment:
   aggregation: mean_probability
   input_mode: roi
   manual_oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_oof.csv
+  manual_oof_sha256: a2bb7c9ea2f56dc7de8f29cebc175441cf6b7a1832684730033def86cb72aeac
   checkpoints:
     0:
       path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/E1/fold_0/best_formal.pt
@@ -32,11 +33,18 @@ candidate_input:
   pattern: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/auto_roi/R0_fold_{fold}_oof_roi.csv
   no_detection_policy: full_image_fallback_and_flag
   retrain_classifier: false
+full_image_control:
+  code: E0
+  role: previously_frozen_whole_image_risk_control
+  oof_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E0_oof.csv
+  oof_sha256: 8a0c0cb26b2211a6b59f78fa9d8b4e9c888f1f4f65cb90d3cd6ce8dceb247ee9
+  interpretation: practical_three_route_context_not_the_primary_roi_source_isolation
 evaluation:
   patients: 967
   outer_folds: [0, 1, 2, 3, 4]
   primary_metric: macro_f1
-  paired_comparison: auto_roi_minus_manual_roi
+  primary_paired_comparison: auto_roi_minus_manual_roi
+  contextual_paired_comparison: auto_roi_minus_full_image
   bootstrap_samples: 2000
   bootstrap_seed: 20260827
   report_metrics: [macro_f1, per_class_sensitivity, per_class_f1, confusion_matrix, top2_accuracy, ece]
@@ -52,4 +60,3 @@ privacy:
   allow_raw_paths_in_public_outputs: false
   allow_source_filenames_in_public_outputs: false
   allow_2026_labels: false
-

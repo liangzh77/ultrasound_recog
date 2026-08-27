@@ -64,6 +64,19 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def require_sha256(path: Path, expected: str, label: str) -> str:
+    """Require a frozen artifact to exist and match its preregistered digest."""
+
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    actual = sha256_file(path)
+    if actual != expected.lower():
+        raise RuntimeError(
+            f"Frozen {label} hash mismatch: expected {expected.lower()}, got {actual}"
+        )
+    return actual
+
+
 def descriptive_distribution(values: Iterable[float]) -> dict[str, float | int | None]:
     array = np.asarray(list(values), dtype=np.float64)
     if array.size == 0:

@@ -18,7 +18,12 @@ from src.common_paths import (  # noqa: E402
     PATIENT_MULTIMODAL_REGISTRY_DIR,
     PATIENT_MULTIMODAL_REPORTS_DIR,
 )
-from src.research_auto_roi import descriptive_distribution, read_csv_rows, sha256_file  # noqa: E402
+from src.research_auto_roi import (  # noqa: E402
+    descriptive_distribution,
+    read_csv_rows,
+    require_sha256,
+    sha256_file,
+)
 from src.research_oof import (  # noqa: E402
     PROBABILITY_COLUMNS,
     compare_oof_files,
@@ -46,6 +51,21 @@ def main() -> int:
     candidate_path = PATIENT_MULTIMODAL_REPORTS_DIR / "oof" / "R1_oof.csv"
     merge_oof_fold_files(fold_paths, candidate_path)
     baseline_path = (ROOT / config["base_experiment"]["manual_oof_path"]).resolve()
+    full_image_path = (ROOT / config["full_image_control"]["oof_path"]).resolve()
+    frozen_inputs = (
+        (
+            baseline_path,
+            config["base_experiment"]["manual_oof_sha256"],
+            "manual ROI OOF",
+        ),
+        (
+            full_image_path,
+            config["full_image_control"]["oof_sha256"],
+            "full-image OOF",
+        ),
+    )
+    for path, expected_hash, label in frozen_inputs:
+        require_sha256(path, expected_hash, label)
     bootstrap_samples = int(config["evaluation"]["bootstrap_samples"])
     bootstrap_seed = int(config["evaluation"]["bootstrap_seed"])
     baseline_evaluation = evaluate_oof_file(
@@ -62,6 +82,19 @@ def main() -> int:
     )
     paired = compare_oof_files(
         baseline_path,
+        candidate_path,
+        PATIENT_MULTIMODAL_REGISTRY_DIR,
+        n_bootstrap=bootstrap_samples,
+        seed=bootstrap_seed,
+    )
+    full_image_evaluation = evaluate_oof_file(
+        full_image_path,
+        PATIENT_MULTIMODAL_REGISTRY_DIR,
+        n_bootstrap=bootstrap_samples,
+        seed=bootstrap_seed,
+    )
+    paired_vs_full_image = compare_oof_files(
+        full_image_path,
         candidate_path,
         PATIENT_MULTIMODAL_REGISTRY_DIR,
         n_bootstrap=bootstrap_samples,
@@ -154,6 +187,12 @@ def main() -> int:
         "baseline_manual_roi": baseline_evaluation,
         "candidate_auto_roi": candidate_evaluation,
         "paired_auto_minus_manual": paired,
+        "full_image_risk_control": full_image_evaluation,
+        "paired_auto_minus_full_image_contextual": paired_vs_full_image,
+        "comparison_interpretation": {
+            "primary": "Auto versus manual ROI uses the same frozen E1 checkpoints and isolates inference-time ROI source.",
+            "contextual": "Auto ROI versus E0 compares practical routes but also differs in classifier training input.",
+        },
         "per_class_delta": per_class_delta,
         "changed_top1_patients": len(changed_rows),
         "manual_correct_auto_wrong": sum(
@@ -185,4 +224,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
