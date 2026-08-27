@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,3 +48,10 @@ def test_final_rows_keeps_image_and_hierarchical_predictions_separate():
 def test_definition_accepts_yaml_integer_or_string_fold_keys():
     assert tool.definition({0: {"value": 1}}, 0) == {"value": 1}
     assert tool.definition({"0": {"value": 2}}, 0) == {"value": 2}
+
+
+def test_r2_freezes_small_r0_inference_batches_after_resource_failure():
+    config = yaml.safe_load(tool.CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert config["auto_roi_ensemble"]["inference_batch_size"] == 8
+    assert config["controls"]["resource_retry_may_only_change_inference_batching"] is True

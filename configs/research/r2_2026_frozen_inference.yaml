@@ -25,6 +25,7 @@ auto_roi_ensemble:
   no_member_detection_policy: full_image_fallback_and_flag
   clamp_to_image_bounds: true
   inference_confidence: 0.01
+  inference_batch_size: 8
   preprocessing_config: {path: configs/research/r0_auto_ultrasound_view_roi.yaml, sha256: d073f9c63d6620d123b18ec6e5ecb513c3cf1f4db5f117e5d3860b542c6ee768}
   checkpoint_hash_source: R0_formal_training_summaries
   checkpoints:
@@ -84,3 +85,4 @@ controls:
   prohibit_using_2026_reference_diagnosis_before_prediction_freeze: true
   generate_formal_prediction_once: true
   prediction_manifest_must_include_all_artifact_hashes: true
+  resource_retry_may_only_change_inference_batching: true

@@ -107,27 +107,33 @@ def infer_rois(
         digest = require_sha256(checkpoint, member["sha256"], f"R0 fold {fold}")
         model = YOLO(str(checkpoint))
         seen = set()
-        results = model.predict(
-            source=[str(path) for path in source_files],
-            imgsz=int(r0_config["model"]["image_size"]),
-            conf=float(contract["inference_confidence"]),
-            device=r0_config["runtime"]["device"],
-            stream=True,
-            verbose=False,
-        )
-        for result in results:
-            key = path_to_key.get(str(Path(result.path).resolve()).casefold())
-            if key is None or key in seen:
-                raise ValueError("R0 returned an unknown or duplicate 2026 image")
-            seen.add(key)
-            boxes = result.boxes
-            if boxes is None or len(boxes) == 0:
-                continue
-            best = int(boxes.conf.argmax().item())
-            predicted = ROIBox(*(float(value) for value in boxes.xyxy[best].tolist()))
-            predicted.validate(int(public[key]["width"]), int(public[key]["height"]))
-            boxes_by_image[key].append(predicted)
-            confidences_by_image[key].append(float(boxes.conf[best].item()))
+        batch_size = int(contract["inference_batch_size"])
+        if batch_size < 1:
+            raise ValueError("R0 inference batch size must be positive")
+        for start in range(0, len(source_files), batch_size):
+            batch_files = source_files[start : start + batch_size]
+            results = model.predict(
+                source=[str(path) for path in batch_files],
+                imgsz=int(r0_config["model"]["image_size"]),
+                conf=float(contract["inference_confidence"]),
+                device=r0_config["runtime"]["device"],
+                batch=batch_size,
+                stream=True,
+                verbose=False,
+            )
+            for result in results:
+                key = path_to_key.get(str(Path(result.path).resolve()).casefold())
+                if key is None or key in seen:
+                    raise ValueError("R0 returned an unknown or duplicate 2026 image")
+                seen.add(key)
+                boxes = result.boxes
+                if boxes is None or len(boxes) == 0:
+                    continue
+                best = int(boxes.conf.argmax().item())
+                predicted = ROIBox(*(float(value) for value in boxes.xyxy[best].tolist()))
+                predicted.validate(int(public[key]["width"]), int(public[key]["height"]))
+                boxes_by_image[key].append(predicted)
+                confidences_by_image[key].append(float(boxes.conf[best].item()))
         if seen != set(ordered_keys):
             raise ValueError("R0 did not return every 2026 image exactly once")
         model_manifest.append({"fold": fold, "sha256": digest})
