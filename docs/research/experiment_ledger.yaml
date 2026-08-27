@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T22:30:00+08:00
+updated_at: 2026-08-27T23:20:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,43 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: R3-2026-reference-return-evaluation-preregistered
+    kind: preregistered_external_evaluation
+    status: ready_waiting_for_hospital_reference_return
+    research_question: 冻结R2图像单模态与分层多模态预测在2026时间外队列的患者级六分类表现如何，以及已见AI结果形成参考诊断是否影响解释
+    preregistered_gate: 回表必须完整覆盖医院编号1至225并通过状态、六分类、诊断来源、AI可见性、角色和日期严格合同；主要人群固定为全部可评价患者，同时报告未见AI和已见AI描述性亚组；双模型和全部固定指标同时报告，不按2026择优
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: c58a2922a553d90209c539408d4baa529c90f2b6
+    config:
+      path: configs/research/r3_2026_reference_evaluation.yaml
+      source: git_blob_at_commit
+      sha256: 70d20dd62f8df0dd62ad7f84b5ca1111db5d982ad18dc1c4990f1e999c258853
+    command: python tools/65_evaluate_2026_reference.py --reference-workbook HOSPITAL_COMPLETED_RETURN.xlsx
+    folds: [time_external_2026]
+    seeds: [20260827]
+    pretrained_sha256: not_applicable_frozen_predictions_and_reference_evaluation_only
+    hardware: Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; GPU not required; formal runtime pending hospital return
+    oof: not_applicable_time_external_reference_evaluation_not_yet_run
+    results:
+      expected_patients: 225
+      expected_classes: 6
+      prediction_manifest_sha256: 4c29f1665a5510206ee90afa7611d9dc89a373f81bfd991cb895f79f3f43c43f
+      frozen_hospital_prediction_sha256: 4454eeaccb73ede923a2e7bdb96e96fbb15cf4a025694a5956ed63264be6dfbb
+      reference_return_template_sha256: fa6d80879531a56c96b2a8963763e5d082ac540c531db851702b81beaf21e752
+      evaluator_source_sha256: 8716e988240732b7d53e5b61280d2d1d1d7074686c022947afa6416ccda7bbee
+      evaluator_tool_sha256: dbd5c58074d6eaaed3a7aa08103eff904800b02e62735c2b0144d6ffc444f181
+      focused_tests_passed: 16
+      synthetic_completed_return_rows_validated: 225
+      actual_frozen_prediction_rows_validated: 225
+      reference_diagnoses_read: false
+      formal_evaluation_run: false
+      clinical_use_authorized: false
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/2026医院参考诊断回收与冻结评价预登记_2026-08-27.md
+    failure_or_negative_reason: 医院结构化参考诊断尚未返回，因此没有时间外性能结果；医生若已见AI结果可能产生参照污染，已通过来源字段和固定亚组报告显式保留
+    conclusion: 参考诊断回收模板、严格机器合同、哈希绑定、双模型聚合评价和公开隐私边界均已冻结；当前只等待医院完成独立回表
+    next_step: 收到回表后先运行validate-only；通过后在洁净提交上运行一次正式评价，随后登记聚合结果与最终研究报告
+
   - id: R2-2026-frozen-blind-prediction-formal
     kind: formal_blind_prediction
     status: completed_frozen_waiting_for_hospital_reference_review
