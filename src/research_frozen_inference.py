@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 
 import numpy as np
 
@@ -92,3 +93,38 @@ def confidence_flag(
         reasons.append("top1_top2_margin_below_threshold")
     return bool(reasons), tuple(reasons)
 
+
+def audit_numbered_image_cohort(
+    root: Path, *, expected_patients: int, expected_images: int
+) -> dict[str, int | bool]:
+    """Validate a numbered blind cohort without exposing patient filenames."""
+
+    if not root.is_dir():
+        raise FileNotFoundError(root)
+    patient_dirs = [path for path in root.iterdir() if path.is_dir()]
+    expected_names = {str(value) for value in range(1, expected_patients + 1)}
+    actual_names = {path.name for path in patient_dirs}
+    if actual_names != expected_names:
+        raise ValueError("blind cohort patient directories do not match the frozen range")
+    images = [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.casefold() == ".jpg"
+    ]
+    if len(images) != expected_images:
+        raise ValueError(
+            f"expected {expected_images} blind images, found {len(images)}"
+        )
+    image_counts = {name: 0 for name in expected_names}
+    for image in images:
+        relative = image.relative_to(root)
+        if len(relative.parts) < 2 or relative.parts[0] not in expected_names:
+            raise ValueError("blind image is not contained by a frozen patient directory")
+        image_counts[relative.parts[0]] += 1
+    if any(count == 0 for count in image_counts.values()):
+        raise ValueError("one or more blind patients have no JPG images")
+    return {
+        "patients": len(patient_dirs),
+        "images": len(images),
+        "all_patients_have_images": True,
+    }

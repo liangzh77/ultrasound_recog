@@ -3,6 +3,7 @@ import pytest
 
 from src.research_auto_roi import ROIBox
 from src.research_frozen_inference import (
+    audit_numbered_image_cohort,
     confidence_flag,
     hierarchical_probabilities,
     mean_probability_vectors,
@@ -46,4 +47,17 @@ def test_confidence_flag_reports_both_frozen_reasons():
         "top1_top2_margin_below_threshold",
     )
     assert confidence_flag([0.7, 0.2, 0.1]) == (False, ())
+
+
+def test_audit_numbered_image_cohort_checks_exact_coverage(tmp_path):
+    for patient in ("1", "2"):
+        patient_dir = tmp_path / patient
+        patient_dir.mkdir()
+        (patient_dir / f"{patient}.jpg").write_bytes(b"jpg")
+    assert audit_numbered_image_cohort(
+        tmp_path, expected_patients=2, expected_images=2
+    ) == {"patients": 2, "images": 2, "all_patients_have_images": True}
+    (tmp_path / "2" / "2.jpg").unlink()
+    with pytest.raises(ValueError, match="expected 2 blind images"):
+        audit_numbered_image_cohort(tmp_path, expected_patients=2, expected_images=2)
 
