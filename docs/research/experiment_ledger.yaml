@@ -9,6 +9,62 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: M1-semantic-finding-features-formal
+    kind: formal_retrospective_structured_finding_model_and_bias_control
+    status: completed_strong_structured_finding_signal_requires_bias_limited_interpretation
+    research_question: 13类人工病灶的患者级存在性、对象总数和总面积比例本身能达到怎样的六分类效果，并为M2提供怎样的必要对照
+    preregistered_gate: 固定39特征、外层训练折StandardScaler加类别平衡Logistic Regression、无调参；与M0/E1作配对五折和bootstrap；结果同时解释为医生结构化征象能力与历史标注流程偏倚上限，禁止称AI图像性能
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: c08dc0f9ab37b436781dd4e034ce83cdbacb83ab
+    config:
+      path: configs/research/m1_semantic_finding_features_logreg.yaml
+      source: git_blob_at_commit
+      sha256: c9f0907791dc712fc46276445bda598dccda48e5e9b63d0ad4ed90158f7ffb7b
+    command: python tools/68_evaluate_m1_semantic_features.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: not_applicable_fixed_logistic_regression_no_image_encoder
+    hardware: Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two numeric threads; low priority; GPU not used
+    runtime: 16.5022108 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M1_oof.csv
+      sha256: c9c05161ea5a65c8dae01a19985ddb9addbe603353aef741bcd9eff820f8d28d
+    results:
+      patients: 967
+      images: 4543
+      finding_categories: 13
+      features: 39
+      rgb_used: false
+      excel_used: false
+      m0_macro_f1: 0.2155169150
+      m1_macro_f1: 0.6351333925
+      m1_macro_f1_ci95: [0.6039428202, 0.6647421101]
+      m1_minus_m0: 0.4196164775
+      paired_delta_ci95: [0.3811104690, 0.4588814139]
+      positive_folds: 5
+      fold_macro_f1: [0.6336697846, 0.6063250213, 0.6762418254, 0.6227484144, 0.6210608533]
+      accuracy: 0.6990692865
+      top2_accuracy: 0.8614270941
+      macro_auc: 0.9002343106
+      ece: 0.0608878905
+      multiclass_brier: 0.4347570575
+      normal_f1: 0.7024029575
+      gout_f1: 0.9382716049
+      osteoarthritis_f1: 0.8175182482
+      spondyloarthritis_f1: 0.3710407240
+      injury_f1: 0.2857142857
+      feature_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_patient_features.csv
+      feature_sha256: 72728d2befb41566d41945300754f2ec1dc4940e88a67a4bc63af4c287b598ca
+      weights_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_fold_models.json
+      weights_sha256: 4a89510844848b92be407eb0edb6404574c31d0837029fd71b36d27397ffedf6
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_oof_evaluation.json
+      report_sha256: a2fe106230b01f01c324eca5be38eb7a86f92614cbe722000bce68141bf5a352
+    mlflow_parent_run_ids: [f63f5ad8553b483bb13cb9b0f661f989]
+    markdown_report: docs/project/M1分类别病灶征象患者六分类五折结果_2026-08-28.md
+    failure_or_negative_reason: 痛风和骨关节炎很强但损伤与脊柱关节炎仍弱；历史非穷尽标注和已知诊断后的选择偏差无法与真实医学信号分离
+    conclusion: M1必须作为正式组保留；医生结构化病灶征象远强于图像基线，但不能称为AI图像能力；M2只有超过M1才能支持像素形状空间关系的独立增量
+    next_step: 运行M2 fold0五epoch资源pilot；资源通过后完成固定五折并同时比较M2-M0与M2-M1
+
   - id: M0-M3-semantic-contour-retrospective-preregistered
     kind: preregistered_second_stage_retrospective_study
     status: preparation_completed_m1_m2_preregistered_results_not_seen
