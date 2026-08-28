@@ -4,9 +4,19 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+for _thread_variable in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ[_thread_variable] = "2"
 
 import numpy as np
 import yaml
@@ -14,7 +24,11 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.common_paths import PATIENT_MULTIMODAL_REGISTRY_DIR  # noqa: E402
+from src.common_paths import (  # noqa: E402
+    PATIENT_MULTIMODAL_EXPERIMENT_DIR,
+    PATIENT_MULTIMODAL_REGISTRY_DIR,
+)
+from src.research_runtime import set_below_normal_priority  # noqa: E402
 from src.research_oof import PROBABILITY_COLUMNS  # noqa: E402
 from src.research_schema import DIAGNOSIS_CLASSES  # noqa: E402
 from src.research_semantic_contours import (  # noqa: E402
@@ -26,6 +40,7 @@ from src.research_semantic_features import (  # noqa: E402
     evaluate_m1_against_m0,
     fit_semantic_feature_oof,
 )
+from src.research_tracking import LocalResearchTracker  # noqa: E402
 
 
 CONFIG_PATH = ROOT / "configs/research/m1_semantic_finding_features_logreg.yaml"
@@ -82,6 +97,8 @@ def _load_m0(table, spec: dict) -> np.ndarray:
 
 
 def main() -> int:
+    started = time.perf_counter()
+    below_normal_priority = set_below_normal_priority()
     git_commit = _require_clean_git()
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     if config.get("status") != "frozen_after_semantic_preparation_before_m1_results":
@@ -181,6 +198,33 @@ def main() -> int:
     outputs["weights_json"].write_text(
         json.dumps(fold_models, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    tracker = LocalResearchTracker(
+        PATIENT_MULTIMODAL_EXPERIMENT_DIR / "tracking",
+        "patient-primary-diagnosis",
+    )
+    with tracker.parent_run(
+        "M1-semantic-finding-features-formal",
+        {
+            "study_code": "M1",
+            "prediction_level": "patient",
+            "data_fingerprint": config["data_fingerprint"],
+            "config_sha256": sha256_file(CONFIG_PATH),
+            "git_revision": git_commit,
+            "folds": "0,1,2,3,4",
+            "features": len(table.feature_names),
+            "rgb_used": False,
+            "excel_used": False,
+        },
+    ) as run:
+        mlflow_parent_run_id = run.info.run_id
+        tracker.log_metrics(
+            {
+                "M0_macro_f1": evaluation["M0"]["metrics"]["macro_f1"],
+                "M1_macro_f1": evaluation["M1"]["metrics"]["macro_f1"],
+                "M1_minus_M0": evaluation["M1_minus_M0"]["observed_delta"],
+                "M1_ece": evaluation["M1"]["metrics"]["ece"],
+            }
+        )
     report = {
         "status": "completed_retrospective_semantic_feature_evaluation",
         "study_code": "M1",
@@ -196,6 +240,16 @@ def main() -> int:
         "features": len(table.feature_names),
         "finding_categories": list(categories),
         "evaluation": evaluation,
+        "runtime": {
+            "elapsed_seconds": time.perf_counter() - started,
+            "numeric_thread_limit": 2,
+            "below_normal_priority": below_normal_priority,
+            "gpu_used": False,
+        },
+        "tracking": {
+            "mlflow_experiment": "patient-primary-diagnosis",
+            "mlflow_parent_run_id": mlflow_parent_run_id,
+        },
         "outputs": {
             name: {
                 "path": path.relative_to(ROOT).as_posix(),
