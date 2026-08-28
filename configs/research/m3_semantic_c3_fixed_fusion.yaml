@@ -1,0 +1,46 @@
+study_code: M3
+status: frozen_after_m2_before_m3_results
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+seed: 20260724
+cohort:
+  expected_patients: 967
+  expected_clinical_rows: 767
+  expected_outer_folds: [0, 1, 2, 3, 4]
+  allow_2026: false
+inputs:
+  M0:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_oof.csv
+    sha256: a2bb7c9ea2f56dc7de8f29cebc175441cf6b7a1832684730033def86cb72aeac
+  M1:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M1_oof.csv
+    sha256: c9c05161ea5a65c8dae01a19985ddb9addbe603353aef741bcd9eff820f8d28d
+  M2:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M2_oof.csv
+    sha256: 40e6de2e00feac6082020d7c939c5a0fca828f411973941d0af47b0b2077e708
+  C3:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/clinical/oof/C3_oof.csv
+    sha256: 9bcdedef62b6179a8de0b5118d13a367184cbdc0f0b75a7f23d1bd4a14eb5d8c
+fixed_fusion:
+  normal_probability_source: M2
+  clinical_weight_within_abnormal: 0.75
+  semantic_image_weight_within_abnormal: 0.25
+  search_weights: false
+  missing_clinical_policy: retain_source_image_sixclass_probability
+  clinical_availability_interpretation: historical_workflow_proxy_not_random_missingness
+automatic_comparator:
+  normal_probability_source: M0
+  abnormal_condition_source: C3
+  missing_clinical_policy: retain_M0_probability
+evaluation:
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260724
+  comparisons: [M1_minus_M0, M2_minus_M0, M2_minus_M1, M3_minus_M2, M3_minus_M0C3]
+outputs:
+  oof_csv: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M3_oof.csv
+  result_json: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M0_M3_comprehensive_evaluation.json
+interpretation_contract:
+  historical_clinical_availability_bias_must_be_reported: true
+  M1_is_not_ai_image_performance: true
+  M2_above_M0_but_below_M1_means_no_independent_shape_texture_gain_established: true
+  allow_clinical_use_claim: false
+
