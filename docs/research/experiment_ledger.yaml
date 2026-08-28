@@ -9,6 +9,64 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: M0-M3-semantic-contour-comprehensive-formal
+    kind: formal_retrospective_fixed_fusion_and_comprehensive_comparison
+    status: completed_m3_below_simpler_automatic_comparator_historical_tuning_stopped
+    research_question: M2语义轮廓图像是否超过M1结构化征象，以及固定M2加C3的M3能否超过M2和更简单M0加C3分层对照
+    preregistered_gate: M3固定保留M2正常概率，并在有C3时以75% C3加25% M2异常条件概率融合；无C3保留M2；不搜索权重；配对报告M2-M1、M3-M2和M3-M0C3
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 8e421fee35f163d299327a161a61fe9f29449542
+    config:
+      path: configs/research/m3_semantic_c3_fixed_fusion.yaml
+      source: git_blob_at_commit
+      sha256: 722dd12d614fb0857d74b59b1812da9456d6d7ab3af1609188d699ab7701b58b
+    command: python tools/70_evaluate_m0_m3_semantic_study.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724]
+    pretrained_sha256: not_applicable_frozen_oof_probability_fusion
+    hardware: Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two numeric threads; low priority; GPU not used
+    runtime: 48.4163890 seconds
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M3_oof.csv
+      sha256: de38259f616524aa36355ffc8adcf271632f2de401f7e433d424c437bb404f2d
+    results:
+      patients: 967
+      clinical_available_abnormal_patients: 767
+      clinical_availability_is_random_missingness: false
+      m0_macro_f1: 0.2155169150
+      m1_macro_f1: 0.6351333925
+      m2_macro_f1: 0.3327465965
+      m0_c3_hierarchical_macro_f1: 0.6017603770
+      m0_c3_hierarchical_macro_f1_ci95: [0.5715197684, 0.6318149113]
+      m3_macro_f1: 0.5675607986
+      m3_macro_f1_ci95: [0.5359648152, 0.5977075875]
+      m2_minus_m1: -0.3023867960
+      m2_minus_m1_ci95: [-0.3469273239, -0.2562097149]
+      m2_minus_m1_positive_folds: 0
+      m3_minus_m2: 0.2348142021
+      m3_minus_m2_ci95: [0.1957728198, 0.2734954834]
+      m3_minus_m2_positive_folds: 5
+      m3_minus_m0_c3_hierarchical: -0.0341995783
+      m3_minus_m0_c3_hierarchical_ci95: [-0.0578243762, -0.0095859632]
+      m3_minus_m0_c3_hierarchical_positive_folds: 2
+      m3_accuracy: 0.6277145812
+      m3_balanced_accuracy: 0.5992384355
+      m3_top2_accuracy: 0.7714581179
+      m3_macro_auc: 0.8876278923
+      m3_ece: 0.1070241462
+      m3_multiclass_brier: 0.5008281660
+      abnormal_c3_macro_f1: 0.7185249091
+      abnormal_m3_macro_f1: 0.7140693579
+      abnormal_c3_ece: 0.0475285710
+      abnormal_m3_ece: 0.1391497827
+      report_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M0_M3_comprehensive_evaluation.json
+      report_sha256: 8810fcc99859a41a2b5fea0883ff0799ffbff0ae42ddbf080b75b559df61c754
+    mlflow_parent_run_ids: [5042dbcdb2684bd6b5e01027781a4b88]
+    markdown_report: docs/project/M0_M3语义病灶轮廓综合评价结果_2026-08-28.md
+    failure_or_negative_reason: M2五折均低于M1；M3虽五折均高于M2，但低于更简单M0加C3分层对照且正常类风湿损伤F1下降
+    conclusion: 结构化病灶征象有内部可行性，但当前语义轮廓像素模型及固定临床融合不优于更简单自动流程；停止历史同源调优
+    next_step: 保持2026冻结路线；如医院继续半自动研究，只开展统一协议尽量盲法的新标注和独立验证
+
   - id: M2-semantic-contour-formal
     kind: formal_retrospective_semantic_contour_image_model
     status: completed_above_m0_but_below_m1_pending_frozen_comprehensive_comparison
