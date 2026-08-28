@@ -239,6 +239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     is_gate = config["experiment_code"] == "G0"
     is_abnormal = config["experiment_code"] == "D0"
     is_lesion_guided = config["experiment_code"] == "L0"
+    is_semantic_contour = config["experiment_code"] == "M2"
     pretrained_path = resolve_pretrained_weights(config, ROOT)
     if not args.dry_run and not args.watchdog_child:
         from src.research_watchdog import run_with_hard_timeout
@@ -345,7 +346,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     )
     if (
-        is_gate or is_abnormal or is_lesion_guided
+        is_gate or is_abnormal or is_lesion_guided or is_semantic_contour
     ) and source_freeze["dataset_version"] != config["data_fingerprint"]:
         raise ValueError("Task config and frozen dataset fingerprint do not match")
 
@@ -360,6 +361,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     lesion_mask_records = None
     lesion_mask_stats = None
+    semantic_contour_records = None
+    semantic_contour_stats = None
     if is_lesion_guided:
         from src.research_lesion_guided import load_lesion_mask_manifest
 
@@ -387,6 +390,45 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 "finding_objects": sum(
                     lesion_mask_records[record.image_key].finding_object_count
+                    for record in records
+                ),
+            }
+            for split, records in record_sets.items()
+        }
+    if is_semantic_contour:
+        from src.research_semantic_contours import load_semantic_contour_manifest
+
+        manifest_relative = Path(config["data"]["semantic_manifest_path"])
+        if manifest_relative.is_absolute():
+            raise ValueError("M2 semantic manifest path must be project-relative")
+        manifest_path = (ROOT / manifest_relative).resolve()
+        manifest_path.relative_to(ROOT.resolve())
+        all_image_keys = {
+            record.image_key for records in record_sets.values() for record in records
+        }
+        categories = tuple(config["semantic_contours"]["finding_categories"])
+        semantic_contour_records = load_semantic_contour_manifest(
+            manifest_path,
+            ROOT,
+            str(config["data"]["semantic_manifest_sha256"]),
+            all_image_keys,
+            categories,
+            verify_mask_hashes=True,
+        )
+        semantic_contour_stats = {
+            split: {
+                "images": len(records),
+                "all_zero_semantic_images": sum(
+                    not semantic_contour_records[record.image_key].category_masks
+                    for record in records
+                ),
+                "finding_objects": sum(
+                    sum(
+                        item.object_count
+                        for item in semantic_contour_records[
+                            record.image_key
+                        ].category_masks.values()
+                    )
                     for record in records
                 ),
             }
@@ -491,6 +533,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "mask_manifest_sha256": config["data"]["mask_manifest_sha256"],
             }
         )
+    if is_semantic_contour:
+        run_contract.update(
+            {
+                "input_channels": int(config["model"]["input_channels"]),
+                "semantic_contours": config["semantic_contours"],
+                "semantic_contour_stats": semantic_contour_stats,
+                "semantic_manifest_path": config["data"]["semantic_manifest_path"],
+                "semantic_manifest_sha256": config["data"]["semantic_manifest_sha256"],
+            }
+        )
     if is_abnormal:
         run_contract.update(
             {
@@ -538,6 +590,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_size=int(data_config["output_size"]),
                 pair_transform=(
                     PairedLesionAugmentation(letterbox_fill)
+                    if split == "train"
+                    else None
+                ),
+                letterbox_fill=letterbox_fill,
+            )
+            for split, records in record_sets.items()
+        }
+    elif is_semantic_contour:
+        from src.research_semantic_contours import (
+            PairedSemanticContourAugmentation,
+            SemanticContourResearchImageDataset,
+        )
+
+        categories = tuple(config["semantic_contours"]["finding_categories"])
+        image_datasets = {
+            split: SemanticContourResearchImageDataset(
+                records,
+                {
+                    record.image_key: semantic_contour_records[record.image_key]
+                    for record in records
+                },
+                categories=categories,
+                output_size=int(data_config["output_size"]),
+                pair_transform=(
+                    PairedSemanticContourAugmentation(letterbox_fill)
                     if split == "train"
                     else None
                 ),

@@ -1,6 +1,6 @@
 schema_version: 1
 study_id: knee_patient_multimodal_v1_20260724
-updated_at: 2026-08-27T23:20:00+08:00
+updated_at: 2026-08-28T10:30:00+08:00
 privacy: deidentified_keys_only
 data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
 mlflow:
@@ -9,6 +9,43 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: M0-M3-semantic-contour-retrospective-preregistered
+    kind: preregistered_second_stage_retrospective_study
+    status: preparation_in_progress_results_not_seen
+    research_question: 医生按类别提供病灶轮廓后，人工结构化征象、完整ROI图像加分类别轮廓及其与Excel C3的固定融合分别能达到怎样的患者级六分类效果
+    preregistered_gate: M0复用E1；M1固定13类存在数量面积39特征折内逻辑回归；M2完整ROI RGB加13个可重叠语义通道并保持患者多图；M3固定M2正常门控及75% C3加25% M2异常条件概率；不按结果改类别、模型或权重，不访问2026
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 07a8e30ea3135e995a53412b626a90b607fe7de6
+    config:
+      path: configs/research/m_series_semantic_contour_preparation.yaml
+      source: working_tree_before_first_result
+      sha256: 5b58039b486dadbfc76937b0c09de71ea2fe432858183194907befc0d949d355
+    command: python tools/67_prepare_m_series_semantic_contours.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; M1 CPU only; M2 GPU
+    oof: pending_no_m1_or_m2_results_seen
+    results:
+      expected_patients: 967
+      expected_images: 4543
+      formal_groups: [M0, M1, M2, M3]
+      m0_reuses_e1_strict_oof: true
+      finding_categories: 13
+      m1_features: 39
+      m2_input_channels: 16
+      per_lesion_cropping: false
+      complete_effective_view_rgb_preserved: true
+      category_overlap_preserved: true
+      patient_multi_image_decision: true
+      allow_2026: false
+      historical_absence_is_confirmed_negative: false
+    mlflow_parent_run_ids: []
+    markdown_report: docs/project/第二阶段M0_M3语义病灶轮廓实验预登记_2026-08-28.md
+    failure_or_negative_reason: not_applicable_study_preregistered_before_preparation_or_model_results
+    conclusion: 四组回顾性方法、空间表示、患者隔离和偏倚解释已冻结；当前只开始确定性语义mask准备，不改变已冻结2026交付
+    next_step: 在洁净提交上生成稀疏语义manifest并冻结哈希；随后冻结M1与M2运行配置，先完成M1和M2资源pilot
+
   - id: R3-2026-reference-return-evaluation-preregistered
     kind: preregistered_external_evaluation
     status: ready_waiting_for_hospital_reference_return

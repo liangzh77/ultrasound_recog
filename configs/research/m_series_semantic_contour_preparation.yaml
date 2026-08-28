@@ -1,0 +1,41 @@
+study_code: M0-M3
+status: frozen_preregistered_retrospective_preparation
+dataset_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+cohort:
+  expected_patients: 967
+  expected_images: 4543
+  allow_2026: false
+input_contract:
+  rgb_region: reviewed_ultrasound_rect_complete_image
+  preserve_nonfinding_rgb_pixels: true
+  preserve_relative_spatial_positions: true
+  category_representation: independent_overlapping_binary_channels
+  output_size: 384
+  resize_mode: letterbox
+  mask_interpolation: nearest
+  absent_channel_value: 0
+  absent_channel_interpretation: historical_annotation_not_observed_not_confirmed_negative
+finding_categories:
+  - 半月板囊肿
+  - 囊肿
+  - 滑膜囊肿
+  - 滑膜血流
+  - 痛风石
+  - 积液
+  - 结晶
+  - 腘窝囊肿
+  - 骨侵蚀
+  - 骨赘
+  - 髌下深囊炎
+  - 髌前血肿
+  - 鹅足腱滑囊炎
+privacy:
+  allow_raw_paths_in_public_manifest: false
+  allow_source_filenames_in_public_manifest: false
+  allow_diagnosis_in_mask_manifest: false
+outputs:
+  mask_directory: workspace/data/shared_derived/exp_2026-07_patient_multimodal_v1/M2_semantic_finding_masks_384
+  manifest: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_manifest.csv
+  summary: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_preparation.json
+

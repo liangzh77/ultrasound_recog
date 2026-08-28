@@ -34,7 +34,7 @@ ultrasound_recog/
   `workspace/experiments/active/exp_2026-04_roi_poly_seg`
 - 当前患者级多模态诊断研究：
   `workspace/experiments/active/exp_2026-07_patient_multimodal_v1`
-  — 已完成数据冻结、28 类规范化、患者 manifest、固定五折、E0/E1正式五折和非医学代理审计；审计发现强采集/导出捷径，当前执行E1-S几何敏感性消融后关闭检查点A1。
+  — 已完成冻结开发研究和2026一次性预测，当前等待医院参考诊断；同时启动独立第二阶段M0—M3语义病灶轮廓回顾性研究，不改动2026冻结路线。
 
 每个实验目录独立保存：
 

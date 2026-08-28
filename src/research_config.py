@@ -45,11 +45,12 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E2R",
         "E3",
         "L0",
+        "M2",
     }:
         raise ValueError("Unsupported patient image experiment code")
     if config.get("input_mode") not in {"full", "roi"}:
         raise ValueError("input_mode must be full or roi")
-    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi", "E3": "roi", "L0": "roi"}[
+    expected_mode = {"E0": "full", "E1": "roi", "E1S": "roi", "E2": "roi", "E2R": "roi", "E3": "roi", "L0": "roi", "M2": "roi"}[
         config["experiment_code"]
     ]
     if config["input_mode"] != expected_mode:
@@ -69,6 +70,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E2R": "letterbox",
         "E3": "letterbox",
         "L0": "letterbox",
+        "M2": "letterbox",
     }[config["experiment_code"]]
     if data.get("resize_mode") != expected_resize:
         raise ValueError("Experiment code and resize_mode do not match")
@@ -93,6 +95,7 @@ def load_research_config(path: Path) -> dict[str, Any]:
         "E2R": "gated_attention",
         "E3": "mean_feature",
         "L0": "mean_probability",
+        "M2": "mean_probability",
     }[config["experiment_code"]]
     if aggregation != expected_aggregation:
         raise ValueError("Experiment code and patient aggregation do not match")
@@ -132,6 +135,27 @@ def load_research_config(path: Path) -> dict[str, Any]:
             "mask_manifest_sha256"
         ):
             raise ValueError("L0 requires a frozen mask manifest and SHA-256")
+    elif config["experiment_code"] == "M2":
+        guidance = config.get("semantic_contours") or {}
+        categories = guidance.get("finding_categories") or []
+        if len(categories) != 13 or len(set(categories)) != 13:
+            raise ValueError("M2 requires 13 unique frozen finding categories")
+        if input_channels != 3 + len(categories):
+            raise ValueError("M2 input channels must be RGB plus one per finding category")
+        if guidance.get("rgb_region") != "reviewed_ultrasound_rect_complete_image":
+            raise ValueError("M2 must preserve the complete reviewed effective view")
+        if guidance.get("category_representation") != "independent_overlapping_binary_channels":
+            raise ValueError("M2 requires independent overlapping category channels")
+        if guidance.get("preserve_nonfinding_rgb_pixels") is not True:
+            raise ValueError("M2 must retain non-finding RGB context")
+        if guidance.get("category_names_exposed_to_classifier") is not True:
+            raise ValueError("M2 must expose the frozen semantic channel order")
+        if guidance.get("allow_2026") is not False:
+            raise ValueError("M2 retrospective study cannot access the 2026 cohort")
+        if not data.get("semantic_manifest_path") or not data.get(
+            "semantic_manifest_sha256"
+        ):
+            raise ValueError("M2 requires a frozen semantic manifest and SHA-256")
     elif input_channels != 3:
         raise ValueError("Existing patient image experiments require three RGB channels")
     if int(training.get("max_epochs", 0)) > 60:
