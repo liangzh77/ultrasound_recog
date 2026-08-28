@@ -9,6 +9,61 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: M2-semantic-contour-formal
+    kind: formal_retrospective_semantic_contour_image_model
+    status: completed_above_m0_but_below_m1_pending_frozen_comprehensive_comparison
+    research_question: 完整ROI RGB加13类可重叠语义轮廓通道能否在患者多图六分类中超过纯图像M0，并进一步超过人工结构化征象M1
+    preregistered_gate: 固定16通道、患者级五折和多图概率均值；与M0作配对bootstrap并在冻结综合评价中与M1比较；不按单折或pilot结果改模型，不访问2026
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: fe1020717a7648a367c67960b83db312873ed3d0
+    config:
+      path: configs/research/m2_semantic_contour_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 693ec993f3d0d4682976c180e851445d4b945c72fd0d2e5becfc5a101dd92ae5
+    command: python tools/69_run_m2_formal_folds.py
+    folds: [0, 1, 2, 3, 4]
+    seeds: [20260724, 20260725, 20260726, 20260727, 20260728]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two DataLoader workers; four numeric threads
+    runtime_hours_by_fold: [0.6740666667, 0.5062022222, 0.3414844444, 0.5351691667, 0.3860850000]
+    peak_allocated_gpu_gb_by_fold: [1.3544650078, 1.3510508537, 1.3545556068, 1.3541941643, 1.3496127129]
+    peak_reserved_gpu_gb_by_fold: [2.2636718750, 2.0234375000, 2.0078125000, 2.3710937500, 2.0214843750]
+    oof:
+      path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M2_oof.csv
+      sha256: 40e6de2e00feac6082020d7c939c5a0fca828f411973941d0af47b0b2077e708
+    results:
+      patients: 967
+      images: 4543
+      input_channels: 16
+      m0_macro_f1: 0.2155169150
+      m2_macro_f1: 0.3327465965
+      m2_macro_f1_ci95: [0.2990912442, 0.3648119080]
+      m2_minus_m0: 0.1172296815
+      paired_delta_ci95: [0.0798568148, 0.1556505429]
+      positive_folds_vs_m0: 5
+      fold_macro_f1: [0.2476607679, 0.3335050699, 0.3309065897, 0.3388196411, 0.3092957338]
+      accuracy: 0.3702171665
+      balanced_accuracy: 0.3365595100
+      top2_accuracy: 0.5635987590
+      macro_auc: 0.6896147311
+      ece: 0.0589670538
+      multiclass_brier: 0.7725230897
+      normal_f1: 0.1981981982
+      rheumatoid_arthritis_f1: 0.3636363636
+      gout_f1: 0.5286343612
+      spondyloarthritis_f1: 0.3333333333
+      osteoarthritis_f1: 0.4188311688
+      injury_f1: 0.1538461538
+      evaluation_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M2_oof_evaluation.json
+      evaluation_sha256: 39d1ba55f5f4800bf35abbea551b252c517f82720486ae64c60b7fa4f3c60d67
+      fold_summary_sha256: [a00c93abb78af2502e26c1565c518810482ea94b4d634b0f10a45a08a6ffccfd, 0ea1e0fc1179cd7e307150f1a7611d23fc3fa9426662115cc56d3d0d2a2105d4, dc3ff0382074f740da1a96573bfae490787d81d86b690d727b211b5c409a6e0f, eaf7fe49671f8c362a7585d415468c5115a960da0c9145b505cc563a77a22a77, 32e397cb31985805c912a470615a049141a25c804e937f28dae732acd0b0fa25]
+    mlflow_parent_run_ids: [65b8c298145942a0b772596143359c05, 0d01fbe22d654a7fb46600db8e6d9735, f48f1a87ea6f4c4e80741bef7d108f9b, 315127556ee34768aa479ea2c1b5af19, 9582db18c23b48e4af896c9faf14c4f8]
+    mlflow_fold_run_ids: [e9a6ca88858542c9a723c073483f7385, d5ae03a0e0fe4dbe8345e33166490380, fcfe1c481c234bdbbe9d4887a3831a8e, c06eb8de21f74253b9fd3d4bcb3eb770, 1e527b0be15e4dfcb1d264ed8bc1ed2c]
+    markdown_report: docs/project/M2分类别语义轮廓患者六分类五折结果_2026-08-28.md
+    failure_or_negative_reason: M2虽显著高于M0但远低于M1；正常和损伤灵敏度很低，且历史mask零通道不是确认阴性
+    conclusion: 分类别轮廓作为图像通道对纯图像基线有稳定增益；尚无证据表明像素形状纹理空间关系超过医生结构化类别数量面积信息
+    next_step: 提交并冻结M3单一融合实现；正式报告M2-M1、M3-M2及M3与M0加C3分层对照
+
   - id: M2-fold0-semantic-contour-resource-pilot
     kind: resource_pilot
     status: completed_all_resource_and_isolation_gates_passed
