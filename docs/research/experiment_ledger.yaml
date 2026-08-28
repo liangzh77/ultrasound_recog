@@ -11,7 +11,7 @@ mlflow:
 experiments:
   - id: M0-M3-semantic-contour-retrospective-preregistered
     kind: preregistered_second_stage_retrospective_study
-    status: preparation_in_progress_results_not_seen
+    status: preparation_completed_m1_m2_preregistered_results_not_seen
     research_question: 医生按类别提供病灶轮廓后，人工结构化征象、完整ROI图像加分类别轮廓及其与Excel C3的固定融合分别能达到怎样的患者级六分类效果
     preregistered_gate: M0复用E1；M1固定13类存在数量面积39特征折内逻辑回归；M2完整ROI RGB加13个可重叠语义通道并保持患者多图；M3固定M2正常门控及75% C3加25% M2异常条件概率；不按结果改类别、模型或权重，不访问2026
     data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
@@ -40,11 +40,19 @@ experiments:
       patient_multi_image_decision: true
       allow_2026: false
       historical_absence_is_confirmed_negative: false
+      preparation_git_commit: 72f969c1c4411e757a772eb2f6a2a6df1aa24f67
+      semantic_manifest_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_manifest.csv
+      semantic_manifest_sha256: ef208e72535ff98703ca2d7b5535659a93292099f5f2fc4a34b9910ea5b96292
+      preparation_summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_preparation.json
+      preparation_summary_sha256: c78743721c51df512a9824ed74b959569a846d87ad9a1167bfa69ab746b35015
+      positive_contour_images: 2144
+      all_zero_contour_images: 2399
+      sparse_mask_files: 2346
     mlflow_parent_run_ids: []
     markdown_report: docs/project/第二阶段M0_M3语义病灶轮廓实验预登记_2026-08-28.md
     failure_or_negative_reason: not_applicable_study_preregistered_before_preparation_or_model_results
-    conclusion: 四组回顾性方法、空间表示、患者隔离和偏倚解释已冻结；当前只开始确定性语义mask准备，不改变已冻结2026交付
-    next_step: 在洁净提交上生成稀疏语义manifest并冻结哈希；随后冻结M1与M2运行配置，先完成M1和M2资源pilot
+    conclusion: 语义mask准备及隐私、覆盖、重叠表达和固定折dry-run已通过；M1/M2结果尚未运行或查看，不改变已冻结2026交付
+    next_step: 提交M1/M2冻结配置与实现；先运行M1固定CPU五折，再运行M2 fold0五epoch资源pilot
 
   - id: R3-2026-reference-return-evaluation-preregistered
     kind: preregistered_external_evaluation

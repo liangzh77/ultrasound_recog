@@ -1,0 +1,66 @@
+experiment_code: M2
+status: preregistered
+input_mode: roi
+seed: 20260724
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+data:
+  output_size: 384
+  resize_mode: letterbox
+  max_instances_train: 6
+  patient_batch_size: 1
+  effective_patient_batch_size: 8
+  num_workers: 2
+  semantic_manifest_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_manifest.csv
+  semantic_manifest_sha256: ef208e72535ff98703ca2d7b5535659a93292099f5f2fc4a34b9910ea5b96292
+model:
+  name: efficientnet_b2.ra_in1k
+  pretrained: true
+  pretrained_path: assets/pretrained/efficientnet_b2_ra-bcdf34b7.pth
+  pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+  input_channels: 16
+  num_classes: 6
+  dropout: 0.30
+  aggregation: mean_probability
+semantic_contours:
+  rgb_region: reviewed_ultrasound_rect_complete_image
+  category_representation: independent_overlapping_binary_channels
+  preserve_nonfinding_rgb_pixels: true
+  preserve_relative_spatial_positions: true
+  category_names_exposed_to_classifier: true
+  absent_channel_interpretation: historical_annotation_not_observed_not_confirmed_negative
+  allow_2026: false
+  finding_categories:
+    - 半月板囊肿
+    - 囊肿
+    - 滑膜囊肿
+    - 滑膜血流
+    - 痛风石
+    - 积液
+    - 结晶
+    - 腘窝囊肿
+    - 骨侵蚀
+    - 骨赘
+    - 髌下深囊炎
+    - 髌前血肿
+    - 鹅足腱滑囊炎
+optimizer:
+  name: AdamW
+  encoder_lr: 0.0001
+  head_lr: 0.0003
+  weight_decay: 0.0001
+  gradient_clip: 1.0
+training:
+  max_epochs: 60
+  warmup_epochs: 3
+  early_stopping_patience: 10
+  early_stopping_metric: macro_f1
+  amp: true
+  pilot_epochs: 5
+runtime:
+  max_cpu_threads: 4
+  max_interop_threads: 1
+  target_hours: 10.0
+  soft_limit_hours: 11.5
+  hard_limit_hours: 23.5
+  max_gpu_memory_gb: 9.0
+

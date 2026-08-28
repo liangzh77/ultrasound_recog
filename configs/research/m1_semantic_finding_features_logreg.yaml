@@ -1,0 +1,61 @@
+study_code: M1
+status: frozen_after_semantic_preparation_before_m1_results
+data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+annotation_version: annotations_62ecb01c4d77
+seed: 20260724
+cohort:
+  expected_patients: 967
+  expected_images: 4543
+  expected_outer_folds: [0, 1, 2, 3, 4]
+  allow_2026: false
+inputs:
+  semantic_manifest:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M_semantic_contour_manifest.csv
+    sha256: ef208e72535ff98703ca2d7b5535659a93292099f5f2fc4a34b9910ea5b96292
+  m0_e1_oof:
+    path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/E1_oof.csv
+    sha256: a2bb7c9ea2f56dc7de8f29cebc175441cf6b7a1832684730033def86cb72aeac
+feature_contract:
+  canvas_pixels_per_image: 147456
+  per_category_features: [presence, object_count, area_fraction]
+  object_count_transform: none
+  area_fraction_denominator: patient_image_count_times_canvas_pixels
+  use_rgb: false
+  use_excel: false
+  absence_interpretation: historical_annotation_not_observed_not_confirmed_negative
+finding_categories:
+  - 半月板囊肿
+  - 囊肿
+  - 滑膜囊肿
+  - 滑膜血流
+  - 痛风石
+  - 积液
+  - 结晶
+  - 腘窝囊肿
+  - 骨侵蚀
+  - 骨赘
+  - 髌下深囊炎
+  - 髌前血肿
+  - 鹅足腱滑囊炎
+model:
+  preprocessing: outer_train_standard_scaler
+  estimator: multinomial_logistic_regression
+  C: 1.0
+  class_weight: balanced
+  solver: lbfgs
+  max_iter: 2000
+  tuning: none
+evaluation:
+  bootstrap_samples: 2000
+  bootstrap_seed: 20260724
+  primary_metric: patient_sixclass_macro_f1
+outputs:
+  feature_csv: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_patient_features.csv
+  oof_csv: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/oof/M1_oof.csv
+  weights_json: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_fold_models.json
+  result_json: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/semantic_contours/M1_oof_evaluation.json
+interpretation_contract:
+  ai_image_performance_claim_allowed: false
+  historical_annotation_selection_bias_must_be_reported: true
+  standardized_prospective_validation_required_for_clinical_claim: true
+
