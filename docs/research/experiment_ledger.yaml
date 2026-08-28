@@ -9,6 +9,50 @@ mlflow:
   database: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/tracking/mlflow.db
 
 experiments:
+  - id: M2-fold0-semantic-contour-resource-pilot
+    kind: resource_pilot
+    status: completed_all_resource_and_isolation_gates_passed
+    research_question: RGB加13类语义轮廓16通道患者多图模型能否在本机资源限制内稳定训练且不迭代外层测试
+    preregistered_gate: fold0五epoch小于1小时、峰值保留显存不超过9GB、CPU不持续饱和、无NaN溢出或资源停止、outer test不迭代；pilot分数不用于选择
+    data_fingerprint: 62ecb01c4d77ec0012704611ecc8d18ef51ebb4e0ea744fb3896948829f0b675
+    git_commit: 7c60439bd4ae50178dbff597a2f50452f83f8369
+    config:
+      path: configs/research/m2_semantic_contour_mean_b2.yaml
+      source: git_blob_at_commit
+      sha256: 693ec993f3d0d4682976c180e851445d4b945c72fd0d2e5becfc5a101dd92ae5
+    command: python tools/26_train_patient_image_mean.py --config configs/research/m2_semantic_contour_mean_b2.yaml --fold 0 --pilot --pilot-epochs 5
+    folds: [0]
+    seeds: [20260724]
+    pretrained_sha256: bcdf34b7ab5a07e20e8cd37d74f7f40ca398b5105e06c755342a9c7ffa892944
+    hardware: NVIDIA GeForce RTX 3080 10GB; Intel Core i9-10900 10-core 20-thread CPU; 64GB RAM; two DataLoader workers; four numeric threads
+    runtime: 0.1283897222 hours
+    oof: not_applicable_resource_pilot_outer_test_not_iterated
+    results:
+      patients: 967
+      images: 4543
+      input_channels: 16
+      epochs_completed: 5
+      best_validation_macro_f1_descriptive_only: 0.1963052641
+      best_epoch_descriptive_only: 4
+      peak_gpu_memory_allocated_gb: 1.3544650078
+      peak_gpu_memory_reserved_gb: 1.962890625
+      cpu_samples_percent: [11.3, 12.9, 13.1, 14.1, 12.7]
+      minimum_available_memory_gb: 35.14
+      outer_test_iterated: false
+      summary_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/M2-fold0-seed20260724-pilot_summary.json
+      summary_sha256: e81db8c3bb1cdf7b6ff4fef625491c43cf2a3f028e2a8fc1680f2898a11240d6
+      history_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/logs/M2/fold_0_pilot_history.json
+      history_sha256: 5c2258601700ada8f724ff1cc42d31b8b1416da14b77209db8d3d76aa9521a86
+      pilot_checkpoint_path: workspace/experiments/active/exp_2026-07_patient_multimodal_v1/artifacts/M2/fold_0/best_pilot.pt
+      pilot_checkpoint_sha256: 31a584a0b21662ce976da26c25b81fb31c4c7486bd01248d66f19604802915b4
+      mlflow_status: FINISHED
+    mlflow_parent_run_ids: [14bd13f2d34f4941b381d8dc069fb71d]
+    mlflow_fold_run_ids: [13b2fb34e8c9404297f738fdc73a4e87]
+    markdown_report: docs/project/M2分类别语义轮廓资源pilot结果_2026-08-28.md
+    failure_or_negative_reason: none_all_preregistered_resource_and_outer_isolation_gates_passed
+    conclusion: M2资源、数值、CPU、显存和外层隔离门通过，不需要资源修订
+    next_step: 从洁净提交独立启动M2 fold0至4正式训练；不复用pilot checkpoint，不按单折结果改配置
+
   - id: M1-semantic-finding-features-formal
     kind: formal_retrospective_structured_finding_model_and_bias_control
     status: completed_strong_structured_finding_signal_requires_bias_limited_interpretation
