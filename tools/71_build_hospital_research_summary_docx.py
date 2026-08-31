@@ -14,7 +14,11 @@ from docx.shared import Inches, Pt, RGBColor
 
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = ROOT / "docs/project/膝关节超声AI识别研究工作总结与阶段结果_2026-08-30.docx"
+OUTPUT = ROOT / "docs/project/膝关节超声AI识别研究工作总结与阶段结果_2026-08-31.docx"
+ROI_FIGURE = (
+    ROOT
+    / "workspace/experiments/active/exp_2026-07_patient_multimodal_v1/reports/input_audit/fold_0_full_vs_roi.jpg"
+)
 
 BLUE = "2E74B5"
 DARK_BLUE = "1F4D78"
@@ -82,6 +86,13 @@ def set_repeat_header(row) -> None:
     header = OxmlElement("w:tblHeader")
     header.set(qn("w:val"), "true")
     tr_pr.append(header)
+
+
+def set_row_cant_split(row) -> None:
+    tr_pr = row._tr.get_or_add_trPr()
+    cant_split = OxmlElement("w:cantSplit")
+    cant_split.set(qn("w:val"), "true")
+    tr_pr.append(cant_split)
 
 
 def set_table_geometry(table, widths_dxa: list[int]) -> None:
@@ -246,9 +257,9 @@ def add_cover(doc: Document) -> None:
     set_run_font(run, size=13, color=MUTED)
 
     for label, value in (
-        ("报告日期", "2026年8月30日"),
-        ("研究阶段", "开发研究完成；“膝关节2026未标注”数据的预测结果已固定，医院参考诊断待回收"),
-        ("报告用途", "向医院说明已完成工作、阶段证据、当前边界及后续协作事项"),
+        ("报告日期", "2026年8月31日"),
+        ("研究阶段", "开发研究完成；形成医生标注病灶多边形后由AI辅助识别的阶段结论"),
+        ("报告用途", "向医院说明已完成工作、阶段证据、研究结论及使用边界"),
     ):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -351,6 +362,34 @@ def add_callout(doc: Document, label: str, text: str, *, fill: str = PALE_BLUE):
     return p
 
 
+def add_roi_figure(doc: Document) -> None:
+    """Add the first full-screen/ROI comparison pair from the audit montage."""
+
+    if not ROI_FIGURE.exists():
+        raise FileNotFoundError(f"ROI figure not found: {ROI_FIGURE}")
+    paragraph = doc.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.space_before = Pt(4)
+    paragraph.paragraph_format.space_after = Pt(3)
+    paragraph.paragraph_format.keep_with_next = True
+    shape = paragraph.add_run().add_picture(str(ROI_FIGURE), width=Inches(6.25), height=Inches(3.12))
+    blip_fill = shape._inline.graphic.graphicData.pic.blipFill
+    src_rect = OxmlElement("a:srcRect")
+    src_rect.set("b", "83333")
+    blip_fill.insert(1, src_rect)
+    shape._inline.docPr.set(
+        "descr",
+        "同一膝关节超声图像的整幅设备画面与有效视野ROI对照，左侧为整幅画面，右侧为只保留超声成像区域的ROI。",
+    )
+
+    caption = doc.add_paragraph()
+    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    caption.paragraph_format.space_after = Pt(8)
+    caption.paragraph_format.keep_together = True
+    run = caption.add_run("图1  有效视野ROI示例：左侧为整幅设备画面，右侧为模型读取的超声成像区域")
+    set_run_font(run, size=9, color=MUTED)
+
+
 def add_table(doc: Document, headers: list[str], rows: list[list[str]], widths_dxa: list[int]):
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
@@ -373,6 +412,8 @@ def add_table(doc: Document, headers: list[str], rows: list[list[str]], widths_d
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run(value)
             set_run_font(run, size=9.25)
+    for row in table.rows:
+        set_row_cant_split(row)
     set_table_geometry(table, widths_dxa)
     after = doc.add_paragraph()
     after.paragraph_format.space_before = Pt(0)
@@ -388,16 +429,16 @@ def build_document() -> Document:
     add_heading(doc, "一、执行摘要")
     add_body(
         doc,
-        "本项目围绕膝关节超声图像的有效视野定位、患者多图六分类、临床Excel信息融合及人工病灶轮廓辅助诊断开展研究。开发队列共967名患者、4,543张图像；另对“膝关节2026未标注”数据中的225名患者、1,819张图像完成了一次固定预测。",
+        "本项目围绕膝关节超声图像的有效视野定位、患者多图六分类、临床Excel信息融合及人工病灶轮廓辅助诊断开展研究。主要开发数据包括967名患者和4,543张图像，并以患者为单位进行五折内部验证。",
     )
     add_body(
         doc,
-        "现阶段已经完成本机可开展的主要开发研究、阴性路线审计、自动有效视野验证、人工病灶轮廓研究以及“膝关节2026未标注”数据的预测交付。尚未完成的是医院为该数据补充独立参考诊断后的最终效果评价。",
+        "研究结果很直观：AI单独读取超声图像时，六类疾病识别效果不足；医生先在患者多张图像上标出病灶多边形并注明病灶类别后，AI汇总病灶的类别、数量和面积进行患者级判断，内部验证中约70%的患者被分到正确类别。该方式显示出作为医生辅助工具的研究价值，但仍不能代替医生诊断。",
     )
     add_callout(
         doc,
         "核心结论",
-        "在现有历史内部数据中，医生提供的分类别病灶结构化信息（M1）取得最高macro-F1 0.6351；但这一结果包含真实医学征象与历史标注流程的共同影响，不能直接表述为AI独立看图准确率。现有全自动图像六分类能力仍有限。",
+        "现阶段较合适的工具形态不是“AI自动看图并直接诊断”，而是“医生标出并命名病灶多边形，AI综合同一患者的多张图像标注结果，给出六分类辅助判断”。技术指标和限制在后文保留，正文优先使用容易理解的表述。",
     )
     add_heading(doc, "二、研究目标与评价框架")
     add_body(
@@ -409,16 +450,16 @@ def build_document() -> Document:
         ["项目", "设计"],
         [
             ["开发数据", "967名患者、4,543张图像；固定患者级五折，患者不跨折"],
-            ["膝关节2026未标注", "225名患者、1,819张图像；已完成一次固定预测"],
+            ["膝关节2026未标注", "225名患者、1,819张图像和Excel；没有病灶多边形，本报告不提交疾病预测"],
             ["主要指标", "患者级macro-F1，并同时观察逐类灵敏度、F1、Top-2和校准"],
-            ["数据隔离", "外层测试不参与训练、早停或选模；“膝关节2026未标注”数据的参考诊断未用于路线选择"],
+            ["数据隔离", "外层测试不参与训练、早停或选模；“膝关节2026未标注”数据不进入本阶段效果结论"],
             ["研究原则", "保存阴性结果；控制复杂度；不在同一OOF上反复搜索参数"],
         ],
         [2300, 7060],
     )
     add_body(
         doc,
-        "说明：macro-F1是六类F1的平均值，每类权重相同，适合观察少数类别是否被总体准确率掩盖；它不是单纯的“正确人数比例”。",
+        "通俗说明：报告中的“准确率”表示总体有多少患者被分对；macro-F1会让六种疾病各占相同分量，避免人数较多的疾病掩盖人数较少疾病的差表现。后者保留在技术结果表中。",
     )
 
     add_heading(doc, "三、研究过程与路线演进")
@@ -427,6 +468,7 @@ def build_document() -> Document:
         doc,
         "研究先建立整图及人工有效视野ROI图像基线，再比较患者级多图训练。患者级学习能够提高内部macro-F1，但复杂注意力模型出现注意力过度集中、折间不稳和过度自信，因此没有仅凭最高内部得分直接选为交付模型。",
     )
+    add_roi_figure(doc)
     add_bullet(doc, "E1：完整有效视野ROI内每张图分别预测，再做患者级概率平均，macro-F1 0.2155。")
     add_bullet(doc, "E2：端到端患者多图注意力模型macro-F1 0.3663，但注意力塌缩率0.6225、ECE 0.4519。")
     add_bullet(doc, "E3：无注意力患者级训练macro-F1 0.3010，仍未达到预设稳定性和安全门。")
@@ -485,7 +527,7 @@ def build_document() -> Document:
     add_callout(
         doc,
         "阶段判断",
-        "M1是现有内部研究中数值最好的方式；M2证明分类别轮廓可以帮助图像模型，但没有复现M1的结构化信息优势；M3加入Excel后仍未超过更简单的M0+C3。因此当前不继续在同一历史数据上搜索语义网络或融合权重。",
+        "用容易理解的话说：AI单独看图的结果不理想；医生把病灶位置和类别告诉AI后，结果明显改善。最有效的信息主要来自医生标出的病灶类别、数量和面积，而不是模型自行学习到的图像纹理或轮廓形状。",
     )
 
     add_heading(doc, "五、如何正确理解M1")
@@ -497,32 +539,32 @@ def build_document() -> Document:
     add_heading(doc, "5.2 M1为什么得分较高", level=2)
     add_body(
         doc,
-        "痛风石、结晶、骨赘等病灶类别本身具有明确医学信息，M1能够直接利用这些类别。同时，历史标注并非逐图穷尽，医生的切面选择、是否标注及可能已知诊断也会进入模型。因此0.6351同时包含医学信号与标注流程信号。",
+        "痛风石、结晶、骨赘等病灶类别本身具有明确医学信息，M1能够直接利用这些类别。在967名患者的内部五折验证中，总体准确率为69.9%，即大约每10名患者中有7名被分到正确类别。不过各病种差异较大：痛风和骨性关节炎较好，损伤和脊柱关节炎仍较弱。同时，历史标注并非逐图穷尽，医生的切面选择、是否标注及可能已知诊断也会影响结果。",
     )
     add_heading(doc, "5.3 当前能够和不能够得出的结论", level=2)
-    add_bullet(doc, "可以说：M1是本轮历史内部五折中表现最好的候选，标准化结构化病灶征象值得进一步验证。")
+    add_bullet(doc, "可以说：医生标注并命名病灶多边形后，AI综合患者多张图像的结构化病灶信息，已经显示出辅助分类价值。")
     add_bullet(doc, "不能说：AI仅凭超声图像已经达到0.6351，或M1已经具备临床独立诊断能力。")
-    add_bullet(doc, "不能直接把M1结果用于“膝关节2026未标注”数据重选模型；已经生成的预测结果必须保持不变。")
-    add_heading(doc, "5.4 若医院继续验证M1", level=2)
+    add_bullet(doc, "还不能说：六种疾病都已经达到同样水平；尤其损伤和脊柱关节炎仍需改进。")
+    add_heading(doc, "5.4 本阶段形成的工具形态", level=2)
     add_body(
         doc,
-        "建议采用统一的新标注协议：逐图记录病灶存在、不存在、当前切面不可见或不确定；轮廓必须带明确类别；标注者尽量不知道最终诊断和AI结果。新患者数据应作为独立验证，不回填现有五折。可先验证M1的低复杂度结构化路线，再决定是否投入更复杂的M2图像轮廓模型。",
+        "医生查看同一患者的多张超声图像，在图像上圈出病灶多边形并选择病灶类别；系统自动统计各类病灶是否出现、数量和面积，再综合该患者全部图像给出六分类辅助判断。AI结果供医生参考，不单独形成诊断。若开展下一阶段验证，应使用统一的新标注协议和新的独立患者数据。",
     )
 
-    add_heading(doc, "六、“膝关节2026未标注”数据与当前交付状态")
+    add_heading(doc, "六、“膝关节2026未标注”数据的处理决定")
     add_body(
         doc,
-        "“膝关节2026未标注”数据共225名患者、1,819张图像及225行同结构临床表。研究已经完成一次固定推理：五个自动有效视野模型均成功定位，0张图使用整图兜底；图像单模态和分层多模态两个结果均已保留。推理时没有读取参考诊断。",
+        "经文件结构核查，“膝关节2026未标注”数据共225名患者、1,819张JPG图像及1份225行临床Excel。该目录中没有JSON、mask或其他病灶多边形标注文件，因此不能直接使用目前表现最好的M1半自动路线。",
     )
     add_callout(
         doc,
-        "尚不能报告的结果",
-        "目前不能给出“膝关节2026未标注”数据的真实macro-F1、准确率或逐类灵敏度，因为医院参考诊断尚未回收。模型预测分布不能代替真实诊断分布，也不能据此判断模型好坏。",
+        "处理决定",
+        "本报告不提供“膝关节2026未标注”数据的疾病预测。原因不是数据数量不足，而是当前全自动图像识别效果不适合作为本项目结论；在没有医生病灶多边形标注的情况下继续给出疾病预测，不能体现本研究已经确认的较优使用方式。",
         fill=PALE_GOLD,
     )
     add_body(
         doc,
-        "医院完成结构化参考诊断回表后，将按预先确定的评价方案一次性计算图像单模态与分层多模态的总体、逐类、校准、置信亚组和配对结果；不得根据“膝关节2026未标注”数据的结果回头调参。",
+        "如果医院后续选择验证半自动工具，可先为这批或另一批独立数据补充带类别的病灶多边形，再由AI按患者汇总多张图像进行识别。是否开展该步骤以及采用哪批数据，由医院根据本阶段报告决定。前期形成的全自动技术性输出只作为内部研究记录保留，不作为对医院提交的疾病判断。",
     )
 
     add_heading(doc, "七、研究局限与风险")
@@ -537,33 +579,21 @@ def build_document() -> Document:
     ):
         add_bullet(doc, item)
 
-    add_heading(doc, "八、阶段结论与建议")
+    add_heading(doc, "八、阶段结论")
     conclusion_numbering = create_numbering_instance(doc)
     add_number(doc, "本机可开展的主要开发研究已经完成，包含成功结果、阴性结果和停止决定；不建议继续在现有历史数据上追加同源调参。", num_id=conclusion_numbering)
-    add_number(doc, "当前全自动研究路线仍采用自动有效视野、E1图像模型和C3分层公式；该路线已对“膝关节2026未标注”数据完成固定预测，但最终效果必须等待医院参考诊断。", num_id=conclusion_numbering)
-    add_number(doc, "M1是内部数据表现最好的半自动候选，适合成为未来标准化新标注的优先验证对象；在独立验证前不作为临床交付模型。", num_id=conclusion_numbering)
-    add_number(doc, "若医院暂不提供“膝关节2026未标注”数据的参考诊断回表或新轮廓标注，当前阶段可以结束并作为基础研究成果归档。", num_id=conclusion_numbering)
+    add_number(doc, "AI单独读取超声图像的六分类效果不足，因此本阶段不把全自动疾病预测作为项目交付结论，也不向医院提交“膝关节2026未标注”数据的疾病预测。", num_id=conclusion_numbering)
+    add_number(doc, "医生标注并命名病灶多边形后，AI汇总患者多张图像的病灶类别、数量和面积进行分类，是现阶段证据支持的辅助工具形态。", num_id=conclusion_numbering)
+    add_number(doc, "该半自动方式在内部验证中总体约70%的患者分类正确，但病种间表现不均，仍需独立验证；医院可据此决定是否进入下一阶段。", num_id=conclusion_numbering)
 
-    add_heading(doc, "九、建议医院协作事项")
-    add_table(
-        doc,
-        ["优先级", "协作事项", "目的", "当前状态"],
-        [
-            ["第一", "完成“膝关节2026未标注”数据的结构化六分类参考诊断回表", "形成该数据的最终效果与验收结论", "待医院反馈"],
-            ["第二（可选）", "讨论是否开展统一协议的新病灶类别/轮廓标注", "独立验证M1半自动结构化征象路线", "医院决定后另行预登记"],
-            ["第三（可选）", "确认参考诊断来源及医生是否见过AI结果", "评估参考标准可能受到的AI可见性影响", "随该数据的回表记录"],
-        ],
-        [1200, 3300, 3260, 1600],
-    )
-
-    add_heading(doc, "十、研究过程留痕与可复核性")
+    add_heading(doc, "九、研究过程留痕与可复核性")
     add_body(
         doc,
-        "研究已保存预登记方案、配置文件、患者级五折OOF结果、逐类指标、bootstrap区间、模型权重或融合输入、运行日志、MLflow记录、Git版本、文件哈希、阴性实验和架构决策记录。“膝关节2026未标注”数据的预测结果与医院回表评价方案均已独立固定。以上技术材料作为内部审计附件保留，本报告仅呈现医生判断所需的主要证据。",
+        "研究已保存预登记方案、配置文件、患者级五折OOF结果、逐类指标、bootstrap区间、模型权重或融合输入、运行日志、MLflow记录、Git版本、文件哈希、阴性实验和架构决策记录。前期对“膝关节2026未标注”数据形成的全自动技术性输出仅作为内部研究记录保留，不作为本报告的疾病预测交付。以上技术材料作为内部审计附件保留，本报告仅呈现医生判断所需的主要证据。",
     )
     add_body(
         doc,
-        "最终工作边界：本报告总结截至2026年8月30日已经完成的开发工作，以及对“膝关节2026未标注”数据完成的固定预测；医院参考诊断返回后对该数据开展的R3独立评价及最终验收结论，不在本报告已完成范围内。",
+        "最终工作边界：本报告总结截至2026年8月31日已经完成的开发研究，并形成“医生病灶多边形标注+AI患者级辅助识别”的阶段结论。是否开展新的标准化标注和独立验证，由医院在阅读本报告后决定。",
     )
 
     return doc
