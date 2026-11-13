@@ -22,3 +22,6 @@ nul
 .label_cache.json
 data
 workspace/experiments
+
+# 本地报告排版检查产物（页面截图、预览 PDF 和校验记录）
+workspace/reports/m_series_report_qa/
